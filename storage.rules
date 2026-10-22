@@ -1,0 +1,26 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAllowedFileType() {
+      return request.resource.contentType.matches('image/.*') || 
+             request.resource.contentType == 'application/pdf';
+    }
+    
+    function isValidFileSize() {
+      return request.resource.size < 10 * 1024 * 1024; // 10 MB limit
+    }
+
+    match /receipts/{poNumber}/{fileName} {
+      // Any authenticated user from the school can view receipts
+      allow read: if isAuthenticated();
+      
+      // Allow upload only if authenticated, valid file type and under size limit
+      allow write: if isAuthenticated() && isAllowedFileType() && isValidFileSize();
+    }
+  }
+}

@@ -1,0 +1,75 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function: Check if user is authenticated and belongs to Wesleyan Christian Academy
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isWcaMember() {
+      return isAuthenticated() && (
+        request.auth.token.email.matches('.*@wcatrojans[.]org$') ||
+        request.auth.token.email.matches('.*@wesleyan[.]edu$')
+      );
+    }
+    
+    // Helper function: Check if user has accountant or admin role
+    function isAccountant() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'accountant' ||
+        request.auth.token.role == 'admin' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['accountant', 'admin']
+      );
+    }
+
+    // User profile collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAccountant() || request.auth.uid == userId;
+    }
+
+    // Expense accounts reference list (e.g. ACCT-4001, ACCT-4002)
+    match /expense_accounts/{accountId} {
+      allow read: if isAuthenticated();
+      allow write: if isAccountant();
+    }
+
+    // Purchase orders collection
+    match /purchase_orders/{poId} {
+      // Employees can read their own; Accountants can read all
+      allow read: if isAuthenticated() && (
+        resource.data.created_by == request.auth.uid || 
+        isAccountant()
+      );
+      
+      // Any authenticated school staff can create a purchase order
+      allow create: if isWcaMember() && 
+        request.resource.data.created_by == request.auth.uid &&
+        request.resource.data.status in ['draft', 'pending_approval'];
+      
+      // Employees can update only if it's their own draft or rejected PO
+      // Accountants can update status, notes, and payment status anytime
+      allow update: if isAuthenticated() && (
+        (resource.data.created_by == request.auth.uid && resource.data.status in ['draft', 'rejected']) ||
+        isAccountant()
+      );
+
+      // Only accountants/admins or owner of drafts can delete
+      allow delete: if isAuthenticated() && (
+        (resource.data.created_by == request.auth.uid && resource.data.status == 'draft') ||
+        isAccountant()
+      );
+
+      // Audit logs sub-collection for every PO
+      match /audit_logs/{logId} {
+        allow read: if isAuthenticated() && (
+          get(/databases/$(database)/documents/purchase_orders/$(poId)).data.created_by == request.auth.uid ||
+          isAccountant()
+        );
+        allow create: if isAuthenticated();
+        allow update, delete: if false; // Audit logs are immutable
+      }
+    }
+  }
+}
