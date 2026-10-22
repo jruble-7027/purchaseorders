@@ -15,11 +15,12 @@ import {
   CheckCheck,
   TrendingUp,
   Building2,
-  AlertCircle
+  AlertCircle,
+  Database
 } from 'lucide-react';
 
 export default function AccountantDashboard({ onSelectPO, onOpenActionModal }) {
-  const { purchaseOrders, expenseAccounts, expenseAccountsMap } = usePOs();
+  const { purchaseOrders, expenseAccounts, expenseAccountsMap, seedDefaultAccounts } = usePOs();
 
   // Filters state
   const [searchQuery, setSearchQuery] = useState('');
@@ -103,13 +104,24 @@ export default function AccountantDashboard({ onSelectPO, onOpenActionModal }) {
           </p>
         </div>
 
-        <button
-          onClick={handleExportCSV}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-md transition"
-        >
-          <Download className="w-4 h-4" />
-          <span>Export Filtered CSV</span>
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={seedDefaultAccounts}
+            title="Seed standard WCA departmental expense accounts into Cloud Firestore"
+            className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-slate-700/80 hover:bg-slate-700 text-slate-200 hover:text-white font-medium text-xs transition border border-slate-600"
+          >
+            <Database className="w-3.5 h-3.5 text-amber-400" />
+            <span>Seed Dept Codes</span>
+          </button>
+
+          <button
+            onClick={handleExportCSV}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-md transition"
+          >
+            <Download className="w-4 h-4" />
+            <span>Export Filtered CSV</span>
+          </button>
+        </div>
       </div>
 
       {/* KPI Financial Overview Cards */}

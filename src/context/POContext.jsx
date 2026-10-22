@@ -347,6 +347,20 @@ export function POProvider({ children }) {
     }
   };
 
+  // Seed default department accounts into Firestore if empty
+  const seedDefaultAccounts = async () => {
+    if (isFirebaseConfigured && db) {
+      for (const acct of DEFAULT_EXPENSE_ACCOUNTS) {
+        await setDoc(doc(db, 'expense_accounts', acct.id), acct);
+      }
+      alert('Department expense codes successfully seeded to Cloud Firestore!');
+    } else {
+      localStorage.setItem('wca_expense_accounts', JSON.stringify(DEFAULT_EXPENSE_ACCOUNTS));
+      setExpenseAccounts(DEFAULT_EXPENSE_ACCOUNTS);
+      alert('Reset default accounts in local preview mode.');
+    }
+  };
+
   // Delete draft PO
   const deletePurchaseOrder = async (poId) => {
     if (isFirebaseConfigured && db) {
@@ -374,7 +388,8 @@ export function POProvider({ children }) {
     rejectPurchaseOrder,
     markPurchaseOrderPaid,
     deletePurchaseOrder,
-    uploadReceiptFile
+    uploadReceiptFile,
+    seedDefaultAccounts
   };
 
   return <POContext.Provider value={value}>{children}</POContext.Provider>;
