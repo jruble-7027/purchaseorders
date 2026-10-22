@@ -33,9 +33,7 @@ if (isFirebaseConfigured) {
     db = getFirestore(app);
     storage = getStorage(app);
     googleProvider = new GoogleAuthProvider();
-    // Restrict Google SSO prompt to institutional domain if supported
     googleProvider.setCustomParameters({
-      hd: 'wcatrojans.org',
       prompt: 'select_account'
     });
   } catch (err) {
