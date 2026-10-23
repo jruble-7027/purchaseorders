@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
+  auth,
   db,
   storage,
   isFirebaseConfigured
@@ -152,12 +153,17 @@ export function POProvider({ children }) {
       }
     }
 
+    const uid = auth?.currentUser?.uid || currentUser?.uid || 'anonymous';
+    const email = auth?.currentUser?.email || currentUser?.email || 'staff@wcatrojans.org';
+    const displayName = auth?.currentUser?.displayName || currentUser?.displayName || 'Faculty Member';
+    const role = currentUser?.role || 'employee';
+
     const newPO = {
       ...poData,
       po_number: poNumber,
-      created_by: currentUser?.uid || 'anonymous',
-      employee_name: currentUser?.displayName || 'Faculty Member',
-      employee_email: currentUser?.email || 'staff@wcatrojans.org',
+      created_by: uid,
+      employee_name: displayName,
+      employee_email: email,
       receipt_urls: uploadedReceipts,
       status: poData.isDraft ? 'draft' : 'pending_approval',
       created_at: now,
@@ -166,9 +172,9 @@ export function POProvider({ children }) {
         {
           id: `log_${Date.now()}`,
           timestamp: now,
-          actor_name: currentUser?.displayName || 'Faculty Staff',
-          actor_email: currentUser?.email || 'staff@wcatrojans.org',
-          actor_role: currentUser?.role || 'employee',
+          actor_name: displayName,
+          actor_email: email,
+          actor_role: role,
           action: poData.isDraft ? 'DRAFT_CREATED' : 'SUBMITTED',
           details: poData.isDraft
             ? 'Saved as draft purchase order'

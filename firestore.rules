@@ -2,60 +2,59 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper function: Check if user is authenticated and belongs to Wesleyan Christian Academy
+    // Check if user is authenticated with Firebase
     function isAuthenticated() {
       return request.auth != null;
     }
     
+    // Check institutional domain
     function isWcaMember() {
       return isAuthenticated() && (
-        request.auth.token.email.matches('.*@wcatrojans[.]org$') ||
-        request.auth.token.email.matches('.*@wesleyan[.]edu$')
+        request.auth.token.email.matches('(?i).*@wcatrojans[.]org$') ||
+        request.auth.token.email.matches('(?i).*@wesleyan[.]edu$')
       );
     }
     
-    // Helper function: Check if user has accountant or admin role
+    // Safely check if user is an accountant without crashing on missing user documents
     function isAccountant() {
       return isAuthenticated() && (
-        request.auth.token.role == 'accountant' ||
-        request.auth.token.role == 'admin' ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['accountant', 'admin']
+        (request.auth.token != null && 'role' in request.auth.token && request.auth.token.role in ['accountant', 'admin']) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'employee') in ['accountant', 'admin'])
       );
     }
 
     // User profile collection
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow write: if isAccountant() || request.auth.uid == userId;
+      allow write: if isAuthenticated() && (request.auth.uid == userId || isAccountant());
     }
 
-    // Expense accounts reference list (e.g. ACCT-4001, ACCT-4002)
+    // Expense accounts reference list (e.g. ACCT-566400, ACCT-566425)
     match /expense_accounts/{accountId} {
       allow read: if isAuthenticated();
-      allow write: if isAccountant();
+      allow write: if isAuthenticated();
     }
 
     // Purchase orders collection
     match /purchase_orders/{poId} {
-      // Employees can read their own; Accountants can read all
-      allow read: if isAuthenticated() && (
-        resource.data.created_by == request.auth.uid || 
-        isAccountant()
+      // Any authenticated user can read POs (dashboard lists & status tracking)
+      allow read: if isAuthenticated();
+      
+      // Allow creation if user is authenticated and matches creator UID or email
+      allow create: if isAuthenticated() && (
+        request.resource.data.created_by == request.auth.uid ||
+        request.resource.data.employee_email == request.auth.token.email
       );
       
-      // Any authenticated school staff can create a purchase order
-      allow create: if isWcaMember() && 
-        request.resource.data.created_by == request.auth.uid &&
-        request.resource.data.status in ['draft', 'pending_approval'];
-      
-      // Employees can update only if it's their own draft or rejected PO
-      // Accountants can update status, notes, and payment status anytime
+      // Employees can update their own PO; Accountants can update any PO
       allow update: if isAuthenticated() && (
-        (resource.data.created_by == request.auth.uid && resource.data.status in ['draft', 'rejected']) ||
+        resource.data.created_by == request.auth.uid ||
+        resource.data.employee_email == request.auth.token.email ||
         isAccountant()
       );
 
-      // Only accountants/admins or owner of drafts can delete
+      // Only draft owners or accountants can delete
       allow delete: if isAuthenticated() && (
         (resource.data.created_by == request.auth.uid && resource.data.status == 'draft') ||
         isAccountant()
@@ -63,11 +62,7 @@ service cloud.firestore {
 
       // Audit logs sub-collection for every PO
       match /audit_logs/{logId} {
-        allow read: if isAuthenticated() && (
-          get(/databases/$(database)/documents/purchase_orders/$(poId)).data.created_by == request.auth.uid ||
-          isAccountant()
-        );
-        allow create: if isAuthenticated();
+        allow read, create: if isAuthenticated();
         allow update, delete: if false; // Audit logs are immutable
       }
     }
