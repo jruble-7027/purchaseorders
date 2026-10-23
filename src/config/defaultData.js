@@ -1,12 +1,12 @@
 export const DEFAULT_EXPENSE_ACCOUNTS = [
-  { id: 'ACCT-4001', name: 'High School Science & STEM', budget: 15000, dept: 'Science' },
-  { id: 'ACCT-4002', name: 'Athletics & Physical Education', budget: 35000, dept: 'Athletics' },
-  { id: 'ACCT-4003', name: 'Fine Arts & Music Department', budget: 18000, dept: 'Fine Arts' },
-  { id: 'ACCT-4004', name: 'Information Technology & Software', budget: 45000, dept: 'IT' },
-  { id: 'ACCT-4005', name: 'Facilities & Campus Maintenance', budget: 60000, dept: 'Facilities' },
-  { id: 'ACCT-4006', name: 'Middle School Humanities & Library', budget: 12000, dept: 'Humanities' },
-  { id: 'ACCT-4007', name: 'Elementary Academic Supplies', budget: 20000, dept: 'Elementary' },
-  { id: 'ACCT-4008', name: 'Administrative & General Operations', budget: 25000, dept: 'Administration' },
+  { id: 'ACCT-566400', name: 'IT Supplies', budget: 15000, dept: 'IT Technology' },
+  { id: 'ACCT-566425', name: 'Software Maintenance', budget: 120000, dept: 'IT Technology' },
+  { id: 'ACCT-4003', name: 'Fine Arts & Music Department', budget: 18000, dept: 'IT Technology' },
+  { id: 'ACCT-4004', name: 'Information Technology & Software', budget: 45000, dept: 'IT Technology' },
+  { id: 'ACCT-4005', name: 'Facilities & Campus Maintenance', budget: 60000, dept: 'IT Technology' },
+  { id: 'ACCT-4006', name: 'Middle School Humanities & Library', budget: 12000, dept: 'IT Technology' },
+  { id: 'ACCT-4007', name: 'Elementary Academic Supplies', budget: 20000, dept: 'IT Technology' },
+  { id: 'ACCT-4008', name: 'Administrative & General Operations', budget: 25000, dept: 'IT Technology' },
 ];
 
 export const INITIAL_PURCHASE_ORDERS = [
@@ -14,8 +14,8 @@ export const INITIAL_PURCHASE_ORDERS = [
     id: 'po_001',
     po_number: 'PO-2026-0042',
     created_by: 'usr_staff_01',
-    employee_name: 'Sarah Miller',
-    employee_email: 'sarah.miller@wcatrojans.org',
+    employee_name: 'Wesleyan Staff',
+    employee_email: 'acctpay@wcatrojans.org',
     vendor_name: 'Lab Tech Supply Co.',
     purchase_date: '2026-10-20',
     department_account_id: 'ACCT-4001',

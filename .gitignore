@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 .dist-old*
+.github-backup
+.firebase
 *.local
 
 # Editor directories and files
