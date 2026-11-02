@@ -77,8 +77,8 @@ export default function Navbar({ activeTab, setActiveTab }) {
                   }`}
                 >
                   <ShieldCheck className="w-3.5 h-3.5" />
-                  <span className="hidden md:inline">Business Office</span>
-                  <span className="md:hidden">Accountant</span>
+                  <span className="hidden md:inline">Business Office / Admin</span>
+                  <span className="md:hidden">Approver</span>
                 </button>
               </div>
 
@@ -95,7 +95,7 @@ export default function Navbar({ activeTab, setActiveTab }) {
                       {currentUser.displayName}
                     </div>
                     <div className="text-[10px] text-amber-400 capitalize">
-                      {currentUser.role === 'accountant' ? 'Business Office' : 'Faculty / Staff'}
+                      {currentUser.role === 'admin' ? 'System Administrator' : currentUser.role === 'accountant' ? 'Business Office' : 'Faculty / Staff'}
                     </div>
                   </div>
                   {isDemoMode ? (

@@ -203,13 +203,13 @@ export const INITIAL_PURCHASE_ORDERS = [
 ];
 
 export const DEMO_USERS = {
-  employee: {
-    uid: 'usr_staff_01',
-    displayName: 'Wesleyan Faculty (Staff)',
-    email: 'faculty@wcatrojans.org',
-    role: 'employee',
-    department: 'High School Science',
-    photoURL: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150'
+  admin: {
+    uid: 'usr_admin_01',
+    displayName: 'Jonathan Ruble (Administrator)',
+    email: 'jruble@wcatrojans.org',
+    role: 'admin',
+    department: 'IT & Administration',
+    photoURL: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=150'
   },
   accountant: {
     uid: 'usr_accountant_01',
@@ -217,6 +217,14 @@ export const DEMO_USERS = {
     email: 'acctspay@wcatrojans.org',
     role: 'accountant',
     department: 'Accounting & Business Office',
-    photoURL: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=150'
+    photoURL: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=150'
+  },
+  employee: {
+    uid: 'usr_staff_01',
+    displayName: 'Wesleyan Faculty (Staff)',
+    email: 'faculty@wcatrojans.org',
+    role: 'employee',
+    department: 'High School Science',
+    photoURL: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150'
   }
 };

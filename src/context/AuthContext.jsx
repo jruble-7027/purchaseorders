@@ -14,6 +14,10 @@ import { DEMO_USERS } from '../config/defaultData';
 
 const AuthContext = createContext(null);
 
+const ADMIN_EMAILS = (import.meta.env.VITE_ADMIN_EMAILS || 'jruble@wcatrojans.org')
+  .split(',')
+  .map(e => e.trim().toLowerCase());
+
 const ACCOUNTANT_EMAILS = (import.meta.env.VITE_ACCOUNTANT_EMAILS || 'acctspay@wcatrojans.org,acctpay@wcatrojans.org,businessoffice@wcatrojans.org')
   .split(',')
   .map(e => e.trim().toLowerCase());
@@ -44,7 +48,9 @@ export function AuthProvider({ children }) {
           let role = 'employee';
           const emailLower = user.email.toLowerCase();
 
-          if (ACCOUNTANT_EMAILS.includes(emailLower)) {
+          if (ADMIN_EMAILS.includes(emailLower)) {
+            role = 'admin';
+          } else if (ACCOUNTANT_EMAILS.includes(emailLower)) {
             role = 'accountant';
           }
 
