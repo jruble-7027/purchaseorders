@@ -14,7 +14,7 @@ import { DEMO_USERS } from '../config/defaultData';
 
 const AuthContext = createContext(null);
 
-const ACCOUNTANT_EMAILS = (import.meta.env.VITE_ACCOUNTANT_EMAILS || 'businessoffice@wcatrojans.org,robert.accountant@wcatrojans.org')
+const ACCOUNTANT_EMAILS = (import.meta.env.VITE_ACCOUNTANT_EMAILS || 'acctspay@wcatrojans.org,acctpay@wcatrojans.org,businessoffice@wcatrojans.org')
   .split(',')
   .map(e => e.trim().toLowerCase());
 

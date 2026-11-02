@@ -260,7 +260,7 @@ export function POProvider({ children }) {
           id: `log_${Date.now()}`,
           timestamp: now,
           actor_name: currentUser?.displayName || 'Accountant',
-          actor_email: currentUser?.email || 'robert.accountant@wcatrojans.org',
+          actor_email: currentUser?.email || 'acctspay@wcatrojans.org',
           actor_role: 'accountant',
           action: 'APPROVED',
           details: `Approved: ${approvalNotes || 'No additional notes provided.'}`
@@ -298,7 +298,7 @@ export function POProvider({ children }) {
           id: `log_${Date.now()}`,
           timestamp: now,
           actor_name: currentUser?.displayName || 'Accountant',
-          actor_email: currentUser?.email || 'robert.accountant@wcatrojans.org',
+          actor_email: currentUser?.email || 'acctspay@wcatrojans.org',
           actor_role: 'accountant',
           action: 'REJECTED',
           details: `Rejected: ${rejectionReason}`
@@ -334,7 +334,7 @@ export function POProvider({ children }) {
           id: `log_${Date.now()}`,
           timestamp: now,
           actor_name: currentUser?.displayName || 'Accountant',
-          actor_email: currentUser?.email || 'robert.accountant@wcatrojans.org',
+          actor_email: currentUser?.email || 'acctspay@wcatrojans.org',
           actor_role: 'accountant',
           action: 'PAID',
           details: `Disbursed and marked paid. Reference: ${paymentReference || 'N/A'}`

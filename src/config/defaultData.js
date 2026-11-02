@@ -40,8 +40,8 @@ export const INITIAL_PURCHASE_ORDERS = [
       {
         id: 'log_1',
         timestamp: '2026-10-20T14:35:00Z',
-        actor_name: 'Sarah Miller',
-        actor_email: 'sarah.miller@wcatrojans.org',
+        actor_name: 'Wesleyan Faculty',
+        actor_email: 'faculty@wcatrojans.org',
         actor_role: 'employee',
         action: 'SUBMITTED',
         details: 'Purchase order submitted for approval (Total: $635.00)'
@@ -73,7 +73,7 @@ export const INITIAL_PURCHASE_ORDERS = [
     ],
     status: 'approved',
     approval_notes: 'Approved. Charged against 2026 Athletics Equipment Allocation.',
-    approved_by: 'robert.accountant@wcatrojans.org',
+    approved_by: 'acctspay@wcatrojans.org',
     approved_at: '2026-10-19T09:20:00Z',
     created_at: '2026-10-18T10:20:00Z',
     updated_at: '2026-10-19T09:20:00Z',
@@ -90,8 +90,8 @@ export const INITIAL_PURCHASE_ORDERS = [
       {
         id: 'log_2',
         timestamp: '2026-10-19T09:20:00Z',
-        actor_name: 'Robert Vance (Business Office)',
-        actor_email: 'robert.accountant@wcatrojans.org',
+        actor_name: 'Jowayne Twiddy (Business Office)',
+        actor_email: 'acctspay@wcatrojans.org',
         actor_role: 'accountant',
         action: 'APPROVED',
         details: 'Approved with notes: Approved. Charged against 2026 Athletics Equipment Allocation.'
@@ -102,8 +102,8 @@ export const INITIAL_PURCHASE_ORDERS = [
     id: 'po_003',
     po_number: 'PO-2026-0040',
     created_by: 'usr_staff_01',
-    employee_name: 'Sarah Miller',
-    employee_email: 'sarah.miller@wcatrojans.org',
+    employee_name: 'Wesleyan Faculty',
+    employee_email: 'faculty@wcatrojans.org',
     vendor_name: 'Carolina Biological',
     purchase_date: '2026-10-15',
     department_account_id: 'ACCT-4001',
@@ -131,8 +131,8 @@ export const INITIAL_PURCHASE_ORDERS = [
       {
         id: 'log_1',
         timestamp: '2026-10-15T11:05:00Z',
-        actor_name: 'Sarah Miller',
-        actor_email: 'sarah.miller@wcatrojans.org',
+        actor_name: 'Wesleyan Faculty',
+        actor_email: 'faculty@wcatrojans.org',
         actor_role: 'employee',
         action: 'SUBMITTED',
         details: 'Submitted for approval'
@@ -140,8 +140,8 @@ export const INITIAL_PURCHASE_ORDERS = [
       {
         id: 'log_2',
         timestamp: '2026-10-16T10:00:00Z',
-        actor_name: 'Robert Vance (Business Office)',
-        actor_email: 'robert.accountant@wcatrojans.org',
+        actor_name: 'Jowayne Twiddy (Business Office)',
+        actor_email: 'acctspay@wcatrojans.org',
         actor_role: 'accountant',
         action: 'APPROVED',
         details: 'Approved for disbursement'
@@ -149,8 +149,8 @@ export const INITIAL_PURCHASE_ORDERS = [
       {
         id: 'log_3',
         timestamp: '2026-10-17T15:45:00Z',
-        actor_name: 'Robert Vance (Business Office)',
-        actor_email: 'robert.accountant@wcatrojans.org',
+        actor_name: 'Jowayne Twiddy (Business Office)',
+        actor_email: 'acctspay@wcatrojans.org',
         actor_role: 'accountant',
         action: 'PAID',
         details: 'Disbursed via check #CHK-94821'
@@ -175,7 +175,7 @@ export const INITIAL_PURCHASE_ORDERS = [
     receipt_urls: [],
     status: 'rejected',
     rejection_reason: 'Missing itemized vendor invoice or formal quote attachment. Please re-attach the quote from Sweetwater and resubmit.',
-    rejected_by: 'robert.accountant@wcatrojans.org',
+    rejected_by: 'acctspay@wcatrojans.org',
     rejected_at: '2026-10-13T11:15:00Z',
     created_at: '2026-10-12T16:00:00Z',
     updated_at: '2026-10-13T11:15:00Z',
@@ -192,8 +192,8 @@ export const INITIAL_PURCHASE_ORDERS = [
       {
         id: 'log_2',
         timestamp: '2026-10-13T11:15:00Z',
-        actor_name: 'Robert Vance (Business Office)',
-        actor_email: 'robert.accountant@wcatrojans.org',
+        actor_name: 'Jowayne Twiddy (Business Office)',
+        actor_email: 'acctspay@wcatrojans.org',
         actor_role: 'accountant',
         action: 'REJECTED',
         details: 'Rejected: Missing itemized vendor invoice or formal quote attachment.'
@@ -205,16 +205,16 @@ export const INITIAL_PURCHASE_ORDERS = [
 export const DEMO_USERS = {
   employee: {
     uid: 'usr_staff_01',
-    displayName: 'Sarah Miller (Faculty)',
-    email: 'sarah.miller@wcatrojans.org',
+    displayName: 'Wesleyan Faculty (Staff)',
+    email: 'faculty@wcatrojans.org',
     role: 'employee',
     department: 'High School Science',
     photoURL: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150'
   },
   accountant: {
     uid: 'usr_accountant_01',
-    displayName: 'Robert Vance (Business Office)',
-    email: 'robert.accountant@wcatrojans.org',
+    displayName: 'Jowayne Twiddy (Business Office)',
+    email: 'acctspay@wcatrojans.org',
     role: 'accountant',
     department: 'Accounting & Business Office',
     photoURL: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=150'
