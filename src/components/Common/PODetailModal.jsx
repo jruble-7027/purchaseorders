@@ -30,9 +30,31 @@ export default function PODetailModal({ po, onClose, onOpenActionModal, onEditDr
     id: po.department_account_id
   };
 
+  // Compute subtotals by account and overall breakdown
+  const accountSubtotals = {};
+  let sumAmount = 0;
+  let sumSH = 0;
+  let sumTax = 0;
+
+  (po.items || []).forEach((item) => {
+    const acctId = item.account_id || po.department_account_id || 'UNASSIGNED';
+    const baseAmt =
+      item.amount !== undefined
+        ? Number(item.amount) || 0
+        : (Number(item.qty) || 1) * (Number(item.unit_price) || 0);
+    const sh = Number(item.shipping_handling) || 0;
+    const tax = Number(item.tax) || 0;
+    const rowTotal = item.total !== undefined ? Number(item.total) || 0 : baseAmt + sh + tax;
+
+    sumAmount += baseAmt;
+    sumSH += sh;
+    sumTax += tax;
+    accountSubtotals[acctId] = (accountSubtotals[acctId] || 0) + rowTotal;
+  });
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full my-8 overflow-hidden border border-slate-200">
+      <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full my-8 overflow-hidden border border-slate-200">
         
         {/* Header */}
         <div className="bg-[#0C2340] text-white p-5 flex items-center justify-between">
@@ -112,36 +134,82 @@ export default function PODetailModal({ po, onClose, onOpenActionModal, onEditDr
             </p>
           </div>
 
-          {/* Line Items Table */}
+          {/* Line Items Table (ACCT + Vendor + Description : Amount + S/H + Tax) */}
           <div>
             <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-              Itemized Line Items
+              Itemized Purchase Entries (ACCT + Vendor + Description : Amount + S/H + Tax)
             </h4>
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
+            <div className="border border-slate-200 rounded-lg overflow-x-auto">
               <table className="min-w-full divide-y divide-slate-200 text-xs">
                 <thead className="bg-slate-100 font-semibold text-slate-700">
                   <tr>
-                    <th className="px-4 py-2.5 text-left">Description</th>
-                    <th className="px-3 py-2.5 text-center w-16">Qty</th>
-                    <th className="px-3 py-2.5 text-right w-24">Unit Price</th>
+                    <th className="px-3 py-2.5 text-left">ACCT</th>
+                    <th className="px-3 py-2.5 text-left">Vendor</th>
+                    <th className="px-3 py-2.5 text-left">Description</th>
+                    <th className="px-3 py-2.5 text-right w-24">Amount</th>
+                    <th className="px-3 py-2.5 text-right w-20">S/H</th>
+                    <th className="px-3 py-2.5 text-right w-20">Tax</th>
                     <th className="px-4 py-2.5 text-right w-28">Total</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 bg-white">
-                  {(po.items || []).map((item, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50">
-                      <td className="px-4 py-2.5 text-slate-800 font-medium">{item.description}</td>
-                      <td className="px-3 py-2.5 text-slate-600 text-center">{item.qty}</td>
-                      <td className="px-3 py-2.5 text-slate-600 text-right font-mono">${Number(item.unit_price).toFixed(2)}</td>
-                      <td className="px-4 py-2.5 text-slate-900 text-right font-mono font-semibold">
-                        ${Number(item.total).toFixed(2)}
-                      </td>
-                    </tr>
-                  ))}
+                  {(po.items || []).map((item, idx) => {
+                    const acctId = item.account_id || po.department_account_id;
+                    const acctInfo = expenseAccountsMap[acctId];
+                    const baseAmt =
+                      item.amount !== undefined
+                        ? Number(item.amount) || 0
+                        : (Number(item.qty) || 1) * (Number(item.unit_price) || 0);
+                    const sh = Number(item.shipping_handling) || 0;
+                    const tax = Number(item.tax) || 0;
+                    const rowTotal = item.total !== undefined ? Number(item.total) || 0 : baseAmt + sh + tax;
+
+                    return (
+                      <tr key={idx} className="hover:bg-slate-50">
+                        <td className="px-3 py-2.5 font-mono font-bold text-[#0C2340] whitespace-nowrap">
+                          <div>{acctId}</div>
+                          {acctInfo?.name && (
+                            <div className="text-[10px] font-sans font-normal text-slate-500">
+                              {acctInfo.name}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 text-slate-700 font-medium">
+                          {item.vendor || po.vendor_name}
+                        </td>
+                        <td className="px-3 py-2.5 text-slate-800 font-medium">
+                          {item.description}
+                        </td>
+                        <td className="px-3 py-2.5 text-slate-700 text-right font-mono">
+                          ${baseAmt.toFixed(2)}
+                        </td>
+                        <td className="px-3 py-2.5 text-slate-600 text-right font-mono">
+                          ${sh.toFixed(2)}
+                        </td>
+                        <td className="px-3 py-2.5 text-slate-600 text-right font-mono">
+                          ${tax.toFixed(2)}
+                        </td>
+                        <td className="px-4 py-2.5 text-slate-900 text-right font-mono font-semibold">
+                          ${rowTotal.toFixed(2)}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
                 <tfoot className="bg-slate-50 font-bold text-slate-900 border-t border-slate-300">
                   <tr>
-                    <td colSpan="3" className="px-4 py-3 text-right text-xs uppercase tracking-wider">Grand Total Requisition:</td>
+                    <td colSpan="3" className="px-3 py-2.5 text-right text-xs uppercase tracking-wider text-slate-600">
+                      Totals Breakdown:
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono text-xs text-slate-800">
+                      ${sumAmount.toFixed(2)}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono text-xs text-slate-800">
+                      ${sumSH.toFixed(2)}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono text-xs text-slate-800">
+                      ${sumTax.toFixed(2)}
+                    </td>
                     <td className="px-4 py-3 text-right font-mono text-sm text-[#0C2340]">
                       ${Number(po.total_amount).toFixed(2)}
                     </td>
@@ -149,6 +217,34 @@ export default function PODetailModal({ po, onClose, onOpenActionModal, onEditDr
                 </tfoot>
               </table>
             </div>
+
+            {/* Account Allocation Breakdown */}
+            {Object.keys(accountSubtotals).length > 0 && (
+              <div className="mt-3 p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-2">
+                  Subtotals by Account Number (ACCT)
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(accountSubtotals).map(([acctId, sumVal]) => {
+                    const acctObj = expenseAccountsMap[acctId];
+                    return (
+                      <div
+                        key={acctId}
+                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs shadow-sm"
+                      >
+                        <span className="font-mono font-bold text-[#0C2340]">{acctId}</span>
+                        {acctObj?.name && (
+                          <span className="text-slate-500 text-[11px]">({acctObj.name})</span>
+                        )}
+                        <span className="font-mono font-bold text-emerald-700">
+                          ${sumVal.toFixed(2)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Receipts / Document Attachments */}

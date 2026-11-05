@@ -42,9 +42,13 @@ export default function AccountantDashboard({ onSelectPO, onOpenActionModal, onO
 
   // Apply filters to data set
   const filteredPOs = purchaseOrders.filter(po => {
-    // Dept filter
-    if (selectedDept !== 'ALL' && po.department_account_id !== selectedDept) {
-      return false;
+    // Dept filter (matches primary account OR any split line-item account)
+    if (selectedDept !== 'ALL') {
+      const matchesPrimary = po.department_account_id === selectedDept;
+      const matchesItemAcct = (po.items || []).some(i => i.account_id === selectedDept);
+      if (!matchesPrimary && !matchesItemAcct) {
+        return false;
+      }
     }
 
     // Status filter
@@ -63,7 +67,13 @@ export default function AccountantDashboard({ onSelectPO, onOpenActionModal, onO
       const matchVendor = po.vendor_name?.toLowerCase().includes(q);
       const matchEmployee = po.employee_name?.toLowerCase().includes(q) || po.employee_email?.toLowerCase().includes(q);
       const matchPurpose = po.school_purpose?.toLowerCase().includes(q);
-      if (!matchNumber && !matchVendor && !matchEmployee && !matchPurpose) {
+      const matchItems = (po.items || []).some(
+        i =>
+          i.vendor?.toLowerCase().includes(q) ||
+          i.description?.toLowerCase().includes(q) ||
+          i.account_id?.toLowerCase().includes(q)
+      );
+      if (!matchNumber && !matchVendor && !matchEmployee && !matchPurpose && !matchItems) {
         return false;
       }
     }
@@ -405,6 +415,17 @@ export default function AccountantDashboard({ onSelectPO, onOpenActionModal, onO
               <tbody className="divide-y divide-slate-200 bg-white">
                 {filteredPOs.map((po) => {
                   const dept = expenseAccountsMap[po.department_account_id];
+                  const distinctItemAccounts = Array.from(
+                    new Set(
+                      (po.items || [])
+                        .map((i) => i.account_id)
+                        .filter(Boolean)
+                    )
+                  );
+                  const allAccounts =
+                    distinctItemAccounts.length > 0
+                      ? distinctItemAccounts
+                      : [po.department_account_id].filter(Boolean);
 
                   return (
                     <tr
@@ -430,8 +451,27 @@ export default function AccountantDashboard({ onSelectPO, onOpenActionModal, onO
                       </td>
 
                       <td className="px-4 py-3 text-slate-600">
-                        <span className="font-mono font-semibold text-slate-800">{po.department_account_id}</span>
-                        {dept && <div className="text-[10px] text-slate-400 truncate max-w-[150px]">{dept.name}</div>}
+                        {allAccounts.length > 1 ? (
+                          <div>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                              Split ({allAccounts.length} Accounts)
+                            </span>
+                            <div className="text-[10px] font-mono text-slate-500 mt-0.5 truncate max-w-[170px]">
+                              {allAccounts.join(', ')}
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <span className="font-mono font-semibold text-slate-800">
+                              {allAccounts[0] || po.department_account_id}
+                            </span>
+                            {dept && (
+                              <div className="text-[10px] text-slate-400 truncate max-w-[150px]">
+                                {dept.name}
+                              </div>
+                            )}
+                          </>
+                        )}
                       </td>
 
                       <td className="px-4 py-3 text-right font-mono font-bold text-slate-900 whitespace-nowrap">

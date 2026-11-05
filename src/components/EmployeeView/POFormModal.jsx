@@ -7,9 +7,9 @@ import {
   Trash2,
   UploadCloud,
   FileText,
-  DollarSign,
   AlertTriangle,
   Building,
+  CreditCard,
   Calendar,
   Layers,
   Save,
@@ -18,16 +18,23 @@ import {
 
 export default function POFormModal({ isOpen, onClose, initialData = null }) {
   const { currentUser } = useAuth();
-  const { expenseAccounts, previewNextPONumber, createPurchaseOrder, updatePurchaseOrder } = usePOs();
+  const { expenseAccounts, expenseAccountsMap, previewNextPONumber, createPurchaseOrder, updatePurchaseOrder } = usePOs();
 
   const isEditing = Boolean(initialData && initialData.id);
   const currentCalendarYear = new Date().getFullYear();
+  const defaultAccountId = initialData?.department_account_id || expenseAccounts[0]?.id || 'ACCT-566400';
 
-  // Form State
+  // Detect if initial PO is a credit card PO (e.g., Visa-4826)
+  const initialIsCreditCard =
+    initialData?.po_type === 'credit_card' ||
+    /^(visa|mastercard|amex|discover|card)/i.test(initialData?.vendor_name || '');
+
+  const [poType, setPoType] = useState(initialIsCreditCard ? 'credit_card' : 'standard');
   const [vendorName, setVendorName] = useState(initialData?.vendor_name || '');
   const [purchaseDate, setPurchaseDate] = useState(
     initialData?.purchase_date || new Date().toISOString().slice(0, 10)
   );
+
   const initialPOYear =
     initialData?.po_year ||
     parseInt((initialData?.po_number || '').split('-')[1], 10) ||
@@ -36,17 +43,45 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
   const [poYear, setPoYear] = useState(initialPOYear);
   const [manualYearOverride, setManualYearOverride] = useState(false);
 
-  const [departmentAccountId, setDepartmentAccountId] = useState(
-    initialData?.department_account_id || (expenseAccounts[0]?.id || '')
-  );
+  const [departmentAccountId, setDepartmentAccountId] = useState(defaultAccountId);
   const [schoolPurpose, setSchoolPurpose] = useState(initialData?.school_purpose || '');
-  
-  // Line items state
-  const [items, setItems] = useState(
-    initialData?.items && initialData.items.length > 0
-      ? initialData.items
-      : [{ id: 'item_1', description: '', qty: 1, unit_price: '' }]
-  );
+
+  // Normalize existing items or initialize first blank row with: ACCT + Vendor + Description + Amount + S/H + Tax
+  const normalizeInitialItems = () => {
+    if (initialData?.items && initialData.items.length > 0) {
+      return initialData.items.map((it, idx) => {
+        const legacyAmount =
+          it.amount !== undefined && it.amount !== ''
+            ? it.amount
+            : (parseFloat(it.qty) || 1) * (parseFloat(it.unit_price) || 0);
+        return {
+          id: it.id || `item_${idx + 1}`,
+          account_id: it.account_id || initialData.department_account_id || defaultAccountId,
+          vendor: it.vendor || '',
+          description: it.description || '',
+          amount: legacyAmount !== 0 ? String(legacyAmount) : '',
+          shipping_handling:
+            it.shipping_handling !== undefined && Number(it.shipping_handling) !== 0
+              ? String(it.shipping_handling)
+              : '',
+          tax: it.tax !== undefined && Number(it.tax) !== 0 ? String(it.tax) : ''
+        };
+      });
+    }
+    return [
+      {
+        id: 'item_1',
+        account_id: defaultAccountId,
+        vendor: '',
+        description: '',
+        amount: '',
+        shipping_handling: '',
+        tax: ''
+      }
+    ];
+  };
+
+  const [items, setItems] = useState(normalizeInitialItems);
 
   // File uploads
   const [receiptFiles, setReceiptFiles] = useState([]);
@@ -57,6 +92,15 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
 
   if (!isOpen) return null;
 
+  // Row calculations helper
+  const computeRowNumbers = (item) => {
+    const amount = parseFloat(item.amount) || 0;
+    const sh = parseFloat(item.shipping_handling) || 0;
+    const tax = parseFloat(item.tax) || 0;
+    const total = amount + sh + tax;
+    return { amount, sh, tax, total };
+  };
+
   // Handle Item row updates
   const handleItemChange = (index, field, value) => {
     const updated = [...items];
@@ -65,9 +109,18 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
   };
 
   const handleAddItem = () => {
+    const lastAccount = items[items.length - 1]?.account_id || departmentAccountId;
     setItems([
       ...items,
-      { id: `item_${Date.now()}`, description: '', qty: 1, unit_price: '' }
+      {
+        id: `item_${Date.now()}`,
+        account_id: lastAccount,
+        vendor: '',
+        description: '',
+        amount: '',
+        shipping_handling: '',
+        tax: ''
+      }
     ]);
   };
 
@@ -76,14 +129,22 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
     setItems(items.filter((_, i) => i !== index));
   };
 
-  // Grand total calculation
-  const calculateTotal = () => {
-    return items.reduce((sum, item) => {
-      const q = parseFloat(item.qty) || 0;
-      const p = parseFloat(item.unit_price) || 0;
-      return sum + q * p;
-    }, 0);
-  };
+  // Summary totals across all rows
+  const summaryTotals = items.reduce(
+    (acc, item) => {
+      const { amount, sh, tax, total } = computeRowNumbers(item);
+      const acctId = item.account_id || departmentAccountId;
+      acc.subtotalAmount += amount;
+      acc.totalSH += sh;
+      acc.totalTax += tax;
+      acc.grandTotal += total;
+      if (total > 0 || amount > 0) {
+        acc.byAccount[acctId] = (acc.byAccount[acctId] || 0) + total;
+      }
+      return acc;
+    },
+    { subtotalAmount: 0, totalSH: 0, totalTax: 0, grandTotal: 0, byAccount: {} }
+  );
 
   // Receipt files handler
   const handleFileSelect = (e) => {
@@ -105,14 +166,9 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
   const handleSubmit = async (isDraft = false) => {
     setErrorMsg('');
 
-    // Validation
     if (!isDraft) {
       if (!vendorName.trim()) {
-        setErrorMsg('Please enter a Vendor Name.');
-        return;
-      }
-      if (!departmentAccountId) {
-        setErrorMsg('Please select a Department Expense Account.');
+        setErrorMsg('Please enter a Vendor / Supplier or Credit Card Name (e.g. Visa-4826).');
         return;
       }
       if (!schoolPurpose.trim()) {
@@ -120,12 +176,12 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
         return;
       }
 
-      // Check item descriptions & prices
-      const validItems = items.filter(
-        i => i.description.trim() && parseFloat(i.unit_price) > 0 && parseFloat(i.qty) > 0
-      );
+      const validItems = items.filter((i) => {
+        const { total } = computeRowNumbers(i);
+        return i.description.trim() && total > 0;
+      });
       if (validItems.length === 0) {
-        setErrorMsg('Please provide at least one item with a valid description, quantity, and unit price.');
+        setErrorMsg('Please provide at least one line item with an Account, Description, and Amount.');
         return;
       }
     }
@@ -133,23 +189,38 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
     try {
       setSubmitting(true);
 
-      const computedItems = items.map(i => ({
-        description: i.description.trim() || 'Item',
-        qty: parseInt(i.qty, 10) || 1,
-        unit_price: parseFloat(i.unit_price) || 0,
-        total: (parseInt(i.qty, 10) || 1) * (parseFloat(i.unit_price) || 0)
-      }));
+      const computedItems = items.map((i, idx) => {
+        const { amount, sh, tax, total } = computeRowNumbers(i);
+        return {
+          id: i.id || `item_${idx + 1}`,
+          account_id: i.account_id || departmentAccountId,
+          vendor: (i.vendor || '').trim() || vendorName.trim(),
+          description: i.description.trim() || 'Item',
+          qty: 1,
+          unit_price: amount,
+          amount: amount,
+          shipping_handling: sh,
+          tax: tax,
+          total: total
+        };
+      });
 
-      const grandTotal = computedItems.reduce((acc, curr) => acc + curr.total, 0);
+      const primaryAccountId = computedItems[0]?.account_id || departmentAccountId;
+      const distinctAccounts = Array.from(new Set(computedItems.map((i) => i.account_id)));
 
       const poPayload = {
+        po_type: poType,
         vendor_name: vendorName.trim() || 'Draft Vendor',
         purchase_date: purchaseDate,
         po_year: Number(poYear),
-        department_account_id: departmentAccountId,
+        department_account_id: primaryAccountId,
+        account_ids: distinctAccounts,
         school_purpose: schoolPurpose.trim(),
         items: computedItems,
-        total_amount: grandTotal,
+        subtotal_amount: summaryTotals.subtotalAmount,
+        shipping_handling_amount: summaryTotals.totalSH,
+        tax_amount: summaryTotals.totalTax,
+        total_amount: summaryTotals.grandTotal,
         isDraft: isDraft
       };
 
@@ -169,7 +240,6 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
     }
   };
 
-  const totalAmount = calculateTotal();
   const existingPOYear = parseInt((initialData?.po_number || '').split('-')[1], 10);
   const displayedPONumber =
     isEditing && existingPOYear === Number(poYear)
@@ -182,13 +252,13 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
   ).sort((a, b) => a - b);
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full my-6 overflow-hidden border border-slate-200">
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full my-4 overflow-hidden border border-slate-200">
         
         {/* Header */}
-        <div className="bg-[#0C2340] text-white p-5 flex items-center justify-between gap-3">
+        <div className="bg-[#0C2340] text-white px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2.5 flex-wrap">
               <h3 className="text-lg font-bold">
                 {isEditing ? `Edit Purchase Order (${initialData.po_number})` : 'New Purchase Order Requisition'}
               </h3>
@@ -197,20 +267,56 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
               </span>
             </div>
             <p className="text-xs text-amber-300 mt-0.5">
-              Submit requisitions and receipts for Business Office review & approval
+              Supports single-vendor POs and multi-account Credit Card statements (e.g., Visa-4826)
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1 rounded-lg text-slate-300 hover:text-white hover:bg-white/10"
-          >
-            <X className="w-5 h-5" />
-          </button>
+
+          <div className="flex items-center gap-3">
+            {/* Mode Switcher: Standard vs Credit Card */}
+            <div className="bg-slate-800/90 p-1 rounded-lg border border-slate-700 flex items-center text-xs">
+              <button
+                type="button"
+                onClick={() => setPoType('standard')}
+                className={`px-3 py-1.5 rounded-md font-semibold transition flex items-center gap-1.5 ${
+                  poType === 'standard'
+                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                <Building className="w-3.5 h-3.5" />
+                <span>Standard PO</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPoType('credit_card');
+                  if (!vendorName.trim()) {
+                    setVendorName('Visa-4826');
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-md font-semibold transition flex items-center gap-1.5 ${
+                  poType === 'credit_card'
+                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                <CreditCard className="w-3.5 h-3.5" />
+                <span>Credit Card PO</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/10"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Form Body */}
-        <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+        <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
           
           {errorMsg && (
             <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg flex items-center space-x-2 text-rose-800 text-xs">
@@ -219,34 +325,53 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
             </div>
           )}
 
-          {/* Section 1: Basic Vendor & Department Info */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {/* Section 1: Header Metadata */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 bg-slate-50/80 p-4 rounded-xl border border-slate-200/80">
             
-            {/* Vendor Name */}
-            <div className="md:col-span-2">
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                Vendor / Supplier Name *
-              </label>
+            {/* Vendor / Supplier / Card Name */}
+            <div className="md:col-span-5">
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                  {poType === 'credit_card' ? 'Credit Card / Statement Name *' : 'Vendor / Supplier Name *'}
+                </label>
+                {poType === 'credit_card' && vendorName !== 'Visa-4826' && (
+                  <button
+                    type="button"
+                    onClick={() => setVendorName('Visa-4826')}
+                    className="text-[11px] font-semibold text-amber-700 hover:text-amber-900 underline"
+                  >
+                    Use Visa-4826
+                  </button>
+                )}
+              </div>
               <div className="relative">
-                <Building className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                {poType === 'credit_card' ? (
+                  <CreditCard className="w-4 h-4 absolute left-3 top-2.5 text-amber-600" />
+                ) : (
+                  <Building className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                )}
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Lab Tech Supply Co., Amazon Business, B&H Photo"
+                  placeholder={
+                    poType === 'credit_card'
+                      ? 'e.g. Visa-4826'
+                      : 'e.g. Amazon Business, Lab Tech Supply Co., Staples'
+                  }
                   value={vendorName}
                   onChange={(e) => setVendorName(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0C2340] focus:border-transparent outline-none"
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0C2340] focus:border-transparent outline-none bg-white"
                 />
               </div>
             </div>
 
             {/* Purchase Date */}
-            <div>
+            <div className="md:col-span-3">
               <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                Purchase / Invoice Date *
+                Purchase / Statement Date *
               </label>
               <div className="relative">
-                <Calendar className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                <Calendar className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                 <input
                   type="date"
                   required
@@ -259,15 +384,15 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
                       setPoYear(dateYear);
                     }
                   }}
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0C2340] focus:border-transparent outline-none"
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0C2340] focus:border-transparent outline-none bg-white"
                 />
               </div>
             </div>
 
-            {/* PO Accounting Year (Accommodates Jan 1 rollover & Post-Dec 31 submissions) */}
-            <div>
+            {/* PO Accounting Year */}
+            <div className="md:col-span-4">
               <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                PO Year (PO-YYYY) *
+                PO Accounting Year (PO-YYYY) *
               </label>
               <select
                 value={poYear}
@@ -275,156 +400,294 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
                   setPoYear(Number(e.target.value));
                   setManualYearOverride(true);
                 }}
-                title="Automatically rolls over on Jan 1, or select prior year for POs turned in after Dec 31"
                 className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0C2340] focus:border-transparent outline-none bg-white font-semibold text-slate-800"
               >
                 {yearOptions.map((yr) => (
                   <option key={yr} value={yr}>
-                    PO-{yr} {yr === currentCalendarYear - 1 ? '(Prior Year / Post-Dec 31)' : yr === currentCalendarYear ? '(Current Year)' : '(Next Year)'}
+                    PO-{yr}{' '}
+                    {yr === currentCalendarYear - 1
+                      ? '(Prior Year / Post-Dec 31)'
+                      : yr === currentCalendarYear
+                      ? '(Current Year)'
+                      : '(Next Year)'}
                   </option>
                 ))}
               </select>
-              <p className="text-[10px] text-slate-500 mt-1 font-mono">
-                Assigns: <span className="font-bold text-[#0C2340]">{displayedPONumber}</span>
-              </p>
             </div>
 
-            {/* Department Expense Account Dropdown */}
-            <div className="md:col-span-4">
+            {/* Purpose / Justification */}
+            <div className="md:col-span-12">
               <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                Department Expense Account Code *
+                Educational Purpose / Requisition Justification *
               </label>
-              <div className="relative">
-                <Layers className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+              <textarea
+                rows={2}
+                placeholder="Explain what these purchases are for (e.g. monthly Visa-4826 departmental supplies, lab equipment, athletics gear)..."
+                value={schoolPurpose}
+                onChange={(e) => setSchoolPurpose(e.target.value)}
+                className="w-full p-2.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0C2340] focus:border-transparent outline-none bg-white"
+              />
+            </div>
+          </div>
+
+          {/* Section 2: Itemized Line Items (Order: ACCT + Vendor + Description : Amount + S/H + Tax) */}
+          <div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+              <div>
+                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                  Itemized Purchase Entries (ACCT + Vendor + Description : Amount + S/H + Tax) *
+                </label>
+                <p className="text-[11px] text-slate-500">
+                  Assign each line item to its specific Expense Account (`ACCT`), Vendor/Merchant, Description, Base Amount, Shipping/Handling (`S/H`), and Tax.
+                </p>
+              </div>
+
+              {/* Default Account Helper for new rows */}
+              <div className="flex items-center gap-1.5 text-xs">
+                <Layers className="w-3.5 h-3.5 text-slate-400" />
+                <span className="text-slate-500 font-medium">Default New Row ACCT:</span>
                 <select
                   value={departmentAccountId}
                   onChange={(e) => setDepartmentAccountId(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0C2340] focus:border-transparent outline-none bg-white"
+                  className="px-2 py-1 text-xs border border-slate-300 rounded-md bg-white text-slate-700 font-medium"
                 >
                   {expenseAccounts.map((acct) => (
                     <option key={acct.id} value={acct.id}>
-                      {acct.id} — {acct.name} ({acct.dept})
+                      {acct.id} — {acct.name}
                     </option>
                   ))}
                 </select>
               </div>
             </div>
 
-            {/* Purpose / Justification */}
-            <div className="md:col-span-4">
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                Educational Purpose / Requisition Justification *
-              </label>
-              <textarea
-                rows={2}
-                placeholder="Explain what these items are for (e.g. replacement chemistry lab optics, annual curriculum renewal, varsity gear)..."
-                value={schoolPurpose}
-                onChange={(e) => setSchoolPurpose(e.target.value)}
-                className="w-full p-3 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0C2340] focus:border-transparent outline-none"
-              />
-            </div>
-          </div>
+            <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50/70">
+              {/* Desktop Column Header Row */}
+              <div className="hidden lg:grid lg:grid-cols-12 gap-2 px-3 py-2.5 bg-[#0C2340] text-white text-[11px] font-semibold uppercase tracking-wider items-center">
+                <div className="col-span-3">1. Account (ACCT)</div>
+                <div className="col-span-2">2. Vendor / Merchant</div>
+                <div className="col-span-3">3. Description</div>
+                <div className="col-span-1 text-right">Amount ($)</div>
+                <div className="col-span-1 text-right">S/H ($)</div>
+                <div className="col-span-1 text-right">Tax ($)</div>
+                <div className="col-span-1 text-right pr-6">Total</div>
+              </div>
 
-          {/* Section 2: Dynamic Line Items */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Itemized Purchase Items *
-              </label>
-              <span className="text-xs text-slate-500">
-                Unit prices will automatically compute into totals
-              </span>
-            </div>
+              {/* Line Item Rows */}
+              <div className="divide-y divide-slate-200 p-2 sm:p-3 space-y-2 lg:space-y-0">
+                {items.map((item, idx) => {
+                  const { total } = computeRowNumbers(item);
 
-            <div className="space-y-2 border border-slate-200 rounded-xl p-3 bg-slate-50/70">
-              {items.map((item, idx) => {
-                const rowTotal = (parseFloat(item.qty) || 0) * (parseFloat(item.unit_price) || 0);
-
-                return (
-                  <div key={item.id || idx} className="flex flex-col sm:flex-row items-center gap-2 bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm">
-                    {/* Description */}
-                    <div className="flex-1 w-full">
-                      <input
-                        type="text"
-                        placeholder="Item Description / Model # / Part #"
-                        value={item.description}
-                        onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
-                        className="w-full px-3 py-1.5 text-xs sm:text-sm border border-slate-300 rounded-md focus:ring-1 focus:ring-[#0C2340] outline-none"
-                      />
-                    </div>
-
-                    {/* Qty */}
-                    <div className="w-full sm:w-20">
-                      <input
-                        type="number"
-                        min="1"
-                        placeholder="Qty"
-                        value={item.qty}
-                        onChange={(e) => handleItemChange(idx, 'qty', e.target.value)}
-                        className="w-full px-2 py-1.5 text-xs sm:text-sm border border-slate-300 rounded-md text-center focus:ring-1 focus:ring-[#0C2340] outline-none"
-                      />
-                    </div>
-
-                    {/* Unit Price */}
-                    <div className="w-full sm:w-28 relative">
-                      <span className="absolute left-2.5 top-2 text-slate-400 text-xs">$</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder="Price"
-                        value={item.unit_price}
-                        onChange={(e) => handleItemChange(idx, 'unit_price', e.target.value)}
-                        className="w-full pl-6 pr-2 py-1.5 text-xs sm:text-sm border border-slate-300 rounded-md text-right focus:ring-1 focus:ring-[#0C2340] outline-none"
-                      />
-                    </div>
-
-                    {/* Total */}
-                    <div className="w-full sm:w-24 text-right font-mono font-semibold text-slate-800 text-xs sm:text-sm px-2">
-                      ${rowTotal.toFixed(2)}
-                    </div>
-
-                    {/* Delete button */}
-                    <button
-                      type="button"
-                      disabled={items.length <= 1}
-                      onClick={() => handleRemoveItem(idx)}
-                      className="p-1.5 text-slate-400 hover:text-rose-600 disabled:opacity-30 rounded hover:bg-slate-100 transition"
-                      title="Remove item"
+                  return (
+                    <div
+                      key={item.id || idx}
+                      className="grid grid-cols-1 lg:grid-cols-12 gap-2 items-center bg-white p-2.5 rounded-lg lg:rounded-none border lg:border-0 border-slate-200 shadow-sm lg:shadow-none"
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                );
-              })}
+                      {/* 1. ACCT (Account Number) */}
+                      <div className="lg:col-span-3">
+                        <label className="block lg:hidden text-[10px] font-bold uppercase text-slate-500 mb-0.5">
+                          Account (ACCT)
+                        </label>
+                        <select
+                          value={item.account_id || departmentAccountId}
+                          onChange={(e) => handleItemChange(idx, 'account_id', e.target.value)}
+                          className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-md bg-slate-50/50 hover:bg-white focus:bg-white font-semibold text-slate-800 focus:ring-1 focus:ring-[#0C2340] outline-none"
+                        >
+                          {expenseAccounts.map((acct) => (
+                            <option key={acct.id} value={acct.id}>
+                              {acct.id} — {acct.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-              <div className="flex items-center justify-between pt-2">
+                      {/* 2. Vendor / Merchant */}
+                      <div className="lg:col-span-2">
+                        <label className="block lg:hidden text-[10px] font-bold uppercase text-slate-500 mb-0.5">
+                          Vendor / Merchant
+                        </label>
+                        <input
+                          type="text"
+                          placeholder={
+                            poType === 'credit_card'
+                              ? 'e.g. Amazon, Staples'
+                              : vendorName || 'Vendor / Store'
+                          }
+                          value={item.vendor}
+                          onChange={(e) => handleItemChange(idx, 'vendor', e.target.value)}
+                          className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-md focus:ring-1 focus:ring-[#0C2340] outline-none"
+                        />
+                      </div>
+
+                      {/* 3. Description */}
+                      <div className="lg:col-span-3">
+                        <label className="block lg:hidden text-[10px] font-bold uppercase text-slate-500 mb-0.5">
+                          Item Description
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Itemized description / part # / purpose"
+                          value={item.description}
+                          onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
+                          className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-md focus:ring-1 focus:ring-[#0C2340] outline-none"
+                        />
+                      </div>
+
+                      {/* 4. Amount ($) */}
+                      <div className="lg:col-span-1">
+                        <label className="block lg:hidden text-[10px] font-bold uppercase text-slate-500 mb-0.5">
+                          Amount ($)
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-2 top-1.5 text-slate-400 text-xs">$</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="0.00"
+                            value={item.amount}
+                            onChange={(e) => handleItemChange(idx, 'amount', e.target.value)}
+                            className="w-full pl-5 pr-2 py-1.5 text-xs border border-slate-300 rounded-md text-right font-mono focus:ring-1 focus:ring-[#0C2340] outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      {/* 5. Shipping / Handling (S/H) ($) */}
+                      <div className="lg:col-span-1">
+                        <label className="block lg:hidden text-[10px] font-bold uppercase text-slate-500 mb-0.5">
+                          S/H ($)
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-2 top-1.5 text-slate-400 text-xs">$</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="0.00"
+                            value={item.shipping_handling}
+                            onChange={(e) => handleItemChange(idx, 'shipping_handling', e.target.value)}
+                            className="w-full pl-5 pr-2 py-1.5 text-xs border border-slate-300 rounded-md text-right font-mono focus:ring-1 focus:ring-[#0C2340] outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      {/* 6. Tax ($) */}
+                      <div className="lg:col-span-1">
+                        <label className="block lg:hidden text-[10px] font-bold uppercase text-slate-500 mb-0.5">
+                          Tax ($)
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-2 top-1.5 text-slate-400 text-xs">$</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="0.00"
+                            value={item.tax}
+                            onChange={(e) => handleItemChange(idx, 'tax', e.target.value)}
+                            className="w-full pl-5 pr-2 py-1.5 text-xs border border-slate-300 rounded-md text-right font-mono focus:ring-1 focus:ring-[#0C2340] outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      {/* 7. Line Total + Delete */}
+                      <div className="lg:col-span-1 flex items-center justify-between lg:justify-end gap-1 pt-1 lg:pt-0">
+                        <span className="lg:hidden text-xs font-semibold text-slate-500">Line Total:</span>
+                        <span className="font-mono font-bold text-slate-900 text-xs">
+                          ${total.toFixed(2)}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={items.length <= 1}
+                          onClick={() => handleRemoveItem(idx)}
+                          className="p-1 text-slate-400 hover:text-rose-600 disabled:opacity-30 rounded hover:bg-slate-100 transition ml-1"
+                          title="Remove entry"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Add Item & Totals Footer */}
+              <div className="p-3 bg-slate-100/80 border-t border-slate-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <button
                   type="button"
                   onClick={handleAddItem}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 transition"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-300 text-xs font-semibold text-slate-800 bg-white hover:bg-slate-50 shadow-sm transition"
                 >
-                  <Plus className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Add Line Item</span>
+                  <Plus className="w-4 h-4 text-amber-600" />
+                  <span>Add Itemized Entry</span>
                 </button>
 
-                <div className="text-right">
-                  <span className="text-xs text-slate-500 uppercase tracking-wider mr-2 font-semibold">Total Amount:</span>
-                  <span className="text-lg font-bold font-mono text-[#0C2340]">
-                    ${totalAmount.toFixed(2)}
-                  </span>
+                <div className="flex flex-wrap items-center gap-4 sm:gap-6 ml-auto text-xs">
+                  <div className="text-slate-600">
+                    <span>Amount Subtotal: </span>
+                    <strong className="font-mono text-slate-900">
+                      ${summaryTotals.subtotalAmount.toFixed(2)}
+                    </strong>
+                  </div>
+                  <div className="text-slate-600">
+                    <span>Total S/H: </span>
+                    <strong className="font-mono text-slate-900">
+                      ${summaryTotals.totalSH.toFixed(2)}
+                    </strong>
+                  </div>
+                  <div className="text-slate-600">
+                    <span>Total Tax: </span>
+                    <strong className="font-mono text-slate-900">
+                      ${summaryTotals.totalTax.toFixed(2)}
+                    </strong>
+                  </div>
+                  <div className="pl-3 border-l border-slate-300">
+                    <span className="uppercase tracking-wider font-bold text-slate-700 mr-2">
+                      Grand Total:
+                    </span>
+                    <span className="text-lg font-bold font-mono text-[#0C2340]">
+                      ${summaryTotals.grandTotal.toFixed(2)}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
+
+            {/* Live Account Allocation Breakdown (Especially helpful for Credit Card / Multi-Account POs) */}
+            {Object.keys(summaryTotals.byAccount).length > 0 && (
+              <div className="mt-3 p-3.5 rounded-xl bg-amber-50/60 border border-amber-200/80">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-amber-900 mb-2">
+                  Account Allocation Summary (Subtotal by ACCT)
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(summaryTotals.byAccount).map(([acctId, acctSum]) => {
+                    const acctObj = expenseAccountsMap[acctId];
+                    return (
+                      <div
+                        key={acctId}
+                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-amber-300/80 text-xs shadow-sm"
+                      >
+                        <span className="font-mono font-bold text-[#0C2340]">{acctId}</span>
+                        {acctObj?.name && (
+                          <span className="text-slate-500 text-[11px]">({acctObj.name})</span>
+                        )}
+                        <span className="font-mono font-bold text-emerald-700">
+                          ${acctSum.toFixed(2)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Section 3: Receipt & Document Uploads */}
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-              Receipts, Quotes, or Itemized Invoices
+              Receipts, Credit Card Statements, or Itemized Invoices
             </label>
             <p className="text-xs text-slate-500 mb-2">
-              Attach vendor order confirmation, formal quote, or itemized receipt (PDF, JPG, PNG up to 10MB)
+              Attach vendor order confirmation, formal quote, or itemized credit card receipts (PDF, JPG, PNG up to 10MB)
             </p>
 
             <div className="border-2 border-dashed border-slate-300 rounded-xl p-4 text-center hover:border-amber-500/50 hover:bg-amber-500/5 transition cursor-pointer relative">
@@ -442,16 +705,19 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
               <p className="text-[11px] text-slate-400">PDF, PNG, JPG accepted</p>
             </div>
 
-            {/* List of uploaded files */}
             {(receiptFiles.length > 0 || existingReceipts.length > 0) && (
               <div className="mt-3 space-y-1.5">
-                {/* Existing receipts */}
                 {existingReceipts.map((rec, i) => (
-                  <div key={`existing_${i}`} className="flex items-center justify-between p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs">
+                  <div
+                    key={`existing_${i}`}
+                    className="flex items-center justify-between p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                  >
                     <div className="flex items-center gap-2 truncate">
                       <FileText className="w-4 h-4 text-blue-600 shrink-0" />
                       <span className="truncate text-slate-800">{rec.name || 'Uploaded Document'}</span>
-                      <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded">Saved</span>
+                      <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded">
+                        Saved
+                      </span>
                     </div>
                     <button
                       type="button"
@@ -463,13 +729,17 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
                   </div>
                 ))}
 
-                {/* New receipts */}
                 {receiptFiles.map((file, i) => (
-                  <div key={`new_${i}`} className="flex items-center justify-between p-2 bg-amber-50/70 border border-amber-200 rounded-lg text-xs">
+                  <div
+                    key={`new_${i}`}
+                    className="flex items-center justify-between p-2 bg-amber-50/70 border border-amber-200 rounded-lg text-xs"
+                  >
                     <div className="flex items-center gap-2 truncate">
                       <FileText className="w-4 h-4 text-amber-600 shrink-0" />
                       <span className="truncate text-slate-800">{file.name}</span>
-                      <span className="text-[10px] text-slate-500">({(file.size / 1024).toFixed(0)} KB)</span>
+                      <span className="text-[10px] text-slate-500">
+                        ({(file.size / 1024).toFixed(0)} KB)
+                      </span>
                     </div>
                     <button
                       type="button"
@@ -487,7 +757,7 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
         </div>
 
         {/* Modal Footer */}
-        <div className="bg-slate-50 p-4 border-t border-slate-200 flex items-center justify-between">
+        <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex items-center justify-between">
           <button
             type="button"
             disabled={submitting}
