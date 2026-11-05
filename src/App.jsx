@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { POProvider, usePOs } from './context/POContext';
 import Navbar from './components/Navbar';
@@ -13,6 +13,7 @@ import { AlertTriangle, Lock } from 'lucide-react';
 function MainPortal() {
   const { currentUser, authError, setAuthError } = useAuth();
   const [activeTab, setActiveTab] = useState('employee'); // 'employee' | 'accountant' | 'users'
+  const hasInitializedTab = useRef(false);
 
   // Modal states
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -20,8 +21,15 @@ function MainPortal() {
   const [selectedPO, setSelectedPO] = useState(null);
   const [actionPO, setActionPO] = useState(null);
 
-  // Sync activeTab when user switches roles
-  const currentRole = currentUser?.role || 'employee';
+  // Automatically land Business Office & System Administrators on Business Office console on login
+  useEffect(() => {
+    if (currentUser && !hasInitializedTab.current) {
+      hasInitializedTab.current = true;
+      if (currentUser.role === 'admin' || currentUser.role === 'accountant') {
+        setActiveTab('accountant');
+      }
+    }
+  }, [currentUser]);
 
   const handleOpenNewPO = () => {
     setEditingPO(null);
@@ -65,6 +73,7 @@ function MainPortal() {
           <AccountantDashboard
             onSelectPO={(po) => setSelectedPO(po)}
             onOpenActionModal={(po) => setActionPO(po)}
+            onOpenUserManagement={() => setActiveTab('users')}
           />
         ) : (
           <EmployeeDashboard

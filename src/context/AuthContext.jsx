@@ -27,7 +27,7 @@ const ADMIN_EMAILS = (import.meta.env.VITE_ADMIN_EMAILS || 'jruble@wcatrojans.or
   .split(',')
   .map(e => e.trim().toLowerCase());
 
-const ACCOUNTANT_EMAILS = (import.meta.env.VITE_ACCOUNTANT_EMAILS || 'acctspay@wcatrojans.org,acctpay@wcatrojans.org,businessoffice@wcatrojans.org')
+const ACCOUNTANT_EMAILS = (import.meta.env.VITE_ACCOUNTANT_EMAILS || 'jruble@wcatrojans.org,acctspay@wcatrojans.org,acctpay@wcatrojans.org,businessoffice@wcatrojans.org')
   .split(',')
   .map(e => e.trim().toLowerCase());
 

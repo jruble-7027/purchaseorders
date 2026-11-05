@@ -18,7 +18,8 @@ export default function Navbar({ activeTab, setActiveTab }) {
 
   const canAccessBusinessOffice =
     isDemoMode || currentUser?.role === 'accountant' || currentUser?.role === 'admin';
-  const canAccessUserAdmin = isDemoMode || currentUser?.role === 'admin';
+  const canAccessUserAdmin =
+    isDemoMode || currentUser?.role === 'admin' || currentUser?.role === 'accountant';
 
   return (
     <>

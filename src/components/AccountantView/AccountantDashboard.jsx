@@ -16,10 +16,11 @@ import {
   TrendingUp,
   Building2,
   AlertCircle,
-  Database
+  Database,
+  Users
 } from 'lucide-react';
 
-export default function AccountantDashboard({ onSelectPO, onOpenActionModal }) {
+export default function AccountantDashboard({ onSelectPO, onOpenActionModal, onOpenUserManagement }) {
   const { purchaseOrders, expenseAccounts, expenseAccountsMap, seedDefaultAccounts } = usePOs();
 
   // Filters state
@@ -105,6 +106,18 @@ export default function AccountantDashboard({ onSelectPO, onOpenActionModal }) {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {onOpenUserManagement && (
+            <button
+              type="button"
+              onClick={onOpenUserManagement}
+              title="Open User Directory & Role Management Console"
+              className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs transition shadow-md"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>User Management</span>
+            </button>
+          )}
+
           <button
             onClick={seedDefaultAccounts}
             title="Seed standard WCA departmental expense accounts into Cloud Firestore"
