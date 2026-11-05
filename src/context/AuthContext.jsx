@@ -185,6 +185,28 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  // Keep currentUser's role & department live-synced if an Admin updates it in Firestore
+  useEffect(() => {
+    if (!currentUser || isDemoMode || !usersList.length) return;
+    const match = usersList.find(
+      (u) =>
+        u.id === currentUser.uid ||
+        u.uid === currentUser.uid ||
+        (u.email && currentUser.email && u.email.toLowerCase() === currentUser.email.toLowerCase())
+    );
+    if (match && match.role && (match.role !== currentUser.role || match.department !== currentUser.department)) {
+      setCurrentUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              role: match.role,
+              department: match.department || prev.department
+            }
+          : prev
+      );
+    }
+  }, [usersList, currentUser, isDemoMode]);
+
   // Login with Google Workspace SSO
   const loginWithGoogle = async () => {
     setAuthError(null);
