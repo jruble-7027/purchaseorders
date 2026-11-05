@@ -9,9 +9,13 @@ import {
 } from 'lucide-react';
 
 export default function ApprovalModal({ po, isOpen, onClose }) {
-  const { approvePurchaseOrder, rejectPurchaseOrder, markPurchaseOrderPaid } = usePOs();
+  const { approvePurchaseOrder, rejectPurchaseOrder, markPurchaseOrderPaid, reassignPOYear, previewNextPONumber } = usePOs();
+
+  const currentCalendarYear = new Date().getFullYear();
+  const initialYear = parseInt((po?.po_number || '').split('-')[1], 10) || po?.po_year || currentCalendarYear;
 
   const [actionType, setActionType] = useState('APPROVE'); // 'APPROVE' | 'REJECT' | 'PAY'
+  const [selectedPOYear, setSelectedPOYear] = useState(initialYear);
   const [notes, setNotes] = useState('');
   const [paymentRef, setPaymentRef] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -19,12 +23,21 @@ export default function ApprovalModal({ po, isOpen, onClose }) {
 
   if (!isOpen || !po) return null;
 
+  const currentPOYear = parseInt((po.po_number || '').split('-')[1], 10) || po.po_year || currentCalendarYear;
+  const yearOptions = Array.from(
+    new Set([currentCalendarYear - 1, currentCalendarYear, currentCalendarYear + 1, currentPOYear])
+  ).sort((a, b) => a - b);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg('');
 
     try {
       setSubmitting(true);
+
+      if (Number(selectedPOYear) !== currentPOYear && reassignPOYear) {
+        await reassignPOYear(po.id, Number(selectedPOYear));
+      }
 
       if (actionType === 'APPROVE') {
         await approvePurchaseOrder(po.id, notes);
@@ -123,6 +136,31 @@ export default function ApprovalModal({ po, isOpen, onClose }) {
               <span>{errorMsg}</span>
             </div>
           )}
+
+          {/* PO Accounting Year Selector (For post-Dec 31 late submissions or Jan 1 rollover) */}
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700">
+                PO Accounting Year (Post-Dec 31 / Jan 1 Control)
+              </label>
+              <p className="text-[11px] text-slate-500">
+                {Number(selectedPOYear) !== currentPOYear
+                  ? `Will reassign to next sequential #: ${previewNextPONumber ? previewNextPONumber(selectedPOYear) : `PO-${selectedPOYear}-0001`}`
+                  : `Currently assigned: ${po.po_number}`}
+              </p>
+            </div>
+            <select
+              value={selectedPOYear}
+              onChange={(e) => setSelectedPOYear(Number(e.target.value))}
+              className="px-2.5 py-1.5 text-xs font-semibold border border-slate-300 rounded-lg bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0C2340]"
+            >
+              {yearOptions.map((yr) => (
+                <option key={yr} value={yr}>
+                  PO-{yr} {yr === currentCalendarYear - 1 ? '(Prior Year)' : yr === currentCalendarYear ? '(Current Year)' : '(Next Year)'}
+                </option>
+              ))}
+            </select>
+          </div>
 
           {actionType === 'APPROVE' && (
             <div>

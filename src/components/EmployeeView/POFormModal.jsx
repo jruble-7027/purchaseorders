@@ -18,15 +18,24 @@ import {
 
 export default function POFormModal({ isOpen, onClose, initialData = null }) {
   const { currentUser } = useAuth();
-  const { expenseAccounts, createPurchaseOrder, updatePurchaseOrder } = usePOs();
+  const { expenseAccounts, previewNextPONumber, createPurchaseOrder, updatePurchaseOrder } = usePOs();
 
   const isEditing = Boolean(initialData && initialData.id);
+  const currentCalendarYear = new Date().getFullYear();
 
   // Form State
   const [vendorName, setVendorName] = useState(initialData?.vendor_name || '');
   const [purchaseDate, setPurchaseDate] = useState(
     initialData?.purchase_date || new Date().toISOString().slice(0, 10)
   );
+  const initialPOYear =
+    initialData?.po_year ||
+    parseInt((initialData?.po_number || '').split('-')[1], 10) ||
+    parseInt((initialData?.purchase_date || '').slice(0, 4), 10) ||
+    currentCalendarYear;
+  const [poYear, setPoYear] = useState(initialPOYear);
+  const [manualYearOverride, setManualYearOverride] = useState(false);
+
   const [departmentAccountId, setDepartmentAccountId] = useState(
     initialData?.department_account_id || (expenseAccounts[0]?.id || '')
   );
@@ -136,6 +145,7 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
       const poPayload = {
         vendor_name: vendorName.trim() || 'Draft Vendor',
         purchase_date: purchaseDate,
+        po_year: Number(poYear),
         department_account_id: departmentAccountId,
         school_purpose: schoolPurpose.trim(),
         items: computedItems,
@@ -160,18 +170,33 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
   };
 
   const totalAmount = calculateTotal();
+  const existingPOYear = parseInt((initialData?.po_number || '').split('-')[1], 10);
+  const displayedPONumber =
+    isEditing && existingPOYear === Number(poYear)
+      ? initialData.po_number
+      : previewNextPONumber
+      ? previewNextPONumber(poYear)
+      : `PO-${poYear}-0001`;
+  const yearOptions = Array.from(
+    new Set([currentCalendarYear - 1, currentCalendarYear, currentCalendarYear + 1, Number(poYear)])
+  ).sort((a, b) => a - b);
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
       <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full my-6 overflow-hidden border border-slate-200">
         
         {/* Header */}
-        <div className="bg-[#0C2340] text-white p-5 flex items-center justify-between">
+        <div className="bg-[#0C2340] text-white p-5 flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-lg font-bold">
-              {isEditing ? `Edit Purchase Order (${initialData.po_number})` : 'New Purchase Order Requisition'}
-            </h3>
-            <p className="text-xs text-amber-300">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-lg font-bold">
+                {isEditing ? `Edit Purchase Order (${initialData.po_number})` : 'New Purchase Order Requisition'}
+              </h3>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-amber-400/20 text-amber-300 border border-amber-400/40">
+                {isEditing && existingPOYear === Number(poYear) ? initialData.po_number : `Next #: ${displayedPONumber}`}
+              </span>
+            </div>
+            <p className="text-xs text-amber-300 mt-0.5">
               Submit requisitions and receipts for Business Office review & approval
             </p>
           </div>
@@ -195,7 +220,7 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
           )}
 
           {/* Section 1: Basic Vendor & Department Info */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             
             {/* Vendor Name */}
             <div className="md:col-span-2">
@@ -226,14 +251,46 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
                   type="date"
                   required
                   value={purchaseDate}
-                  onChange={(e) => setPurchaseDate(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setPurchaseDate(val);
+                    const dateYear = parseInt((val || '').slice(0, 4), 10);
+                    if (!manualYearOverride && !isNaN(dateYear) && dateYear >= 2020 && dateYear <= 2100) {
+                      setPoYear(dateYear);
+                    }
+                  }}
                   className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0C2340] focus:border-transparent outline-none"
                 />
               </div>
             </div>
 
+            {/* PO Accounting Year (Accommodates Jan 1 rollover & Post-Dec 31 submissions) */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                PO Year (PO-YYYY) *
+              </label>
+              <select
+                value={poYear}
+                onChange={(e) => {
+                  setPoYear(Number(e.target.value));
+                  setManualYearOverride(true);
+                }}
+                title="Automatically rolls over on Jan 1, or select prior year for POs turned in after Dec 31"
+                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0C2340] focus:border-transparent outline-none bg-white font-semibold text-slate-800"
+              >
+                {yearOptions.map((yr) => (
+                  <option key={yr} value={yr}>
+                    PO-{yr} {yr === currentCalendarYear - 1 ? '(Prior Year / Post-Dec 31)' : yr === currentCalendarYear ? '(Current Year)' : '(Next Year)'}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-slate-500 mt-1 font-mono">
+                Assigns: <span className="font-bold text-[#0C2340]">{displayedPONumber}</span>
+              </p>
+            </div>
+
             {/* Department Expense Account Dropdown */}
-            <div className="md:col-span-3">
+            <div className="md:col-span-4">
               <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
                 Department Expense Account Code *
               </label>
@@ -254,7 +311,7 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
             </div>
 
             {/* Purpose / Justification */}
-            <div className="md:col-span-3">
+            <div className="md:col-span-4">
               <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
                 Educational Purpose / Requisition Justification *
               </label>
