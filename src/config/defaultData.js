@@ -228,3 +228,56 @@ export const DEMO_USERS = {
     photoURL: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150'
   }
 };
+
+export const INITIAL_DIRECTORY_USERS = [
+  {
+    id: 'usr_admin_01',
+    uid: 'usr_admin_01',
+    displayName: 'Jonathan Ruble',
+    email: 'jruble@wcatrojans.org',
+    role: 'admin',
+    department: 'IT & Administration',
+    photoURL: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=150',
+    last_login: '2026-11-05T13:00:00Z'
+  },
+  {
+    id: 'usr_accountant_01',
+    uid: 'usr_accountant_01',
+    displayName: 'Jowayne Twiddy',
+    email: 'acctspay@wcatrojans.org',
+    role: 'accountant',
+    department: 'Accounting & Business Office',
+    photoURL: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=150',
+    last_login: '2026-11-04T15:30:00Z'
+  },
+  {
+    id: 'usr_staff_02',
+    uid: 'usr_staff_02',
+    displayName: 'Coach Mark Davis',
+    email: 'mdavis@wcatrojans.org',
+    role: 'employee',
+    department: 'Athletics Department',
+    photoURL: '',
+    last_login: '2026-10-18T10:15:00Z'
+  },
+  {
+    id: 'usr_staff_03',
+    uid: 'usr_staff_03',
+    displayName: 'Jason Scott',
+    email: 'jscott@wcatrojans.org',
+    role: 'employee',
+    department: 'Fine Arts & Music Department',
+    photoURL: '',
+    last_login: '2026-10-12T16:00:00Z'
+  },
+  {
+    id: 'usr_staff_01',
+    uid: 'usr_staff_01',
+    displayName: 'Wesleyan Faculty',
+    email: 'faculty@wcatrojans.org',
+    role: 'employee',
+    department: 'High School Science',
+    photoURL: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150',
+    last_login: '2026-10-20T14:32:00Z'
+  }
+];

@@ -4,6 +4,7 @@ import {
   FileText,
   ShieldCheck,
   UserCheck,
+  Users,
   LogOut,
   LogIn,
   Sliders,
@@ -15,7 +16,9 @@ export default function Navbar({ activeTab, setActiveTab }) {
   const { currentUser, isDemoMode, loginWithGoogle, logout, switchDemoRole } = useAuth();
   const [showConfigModal, setShowConfigModal] = useState(false);
 
-  const isAccountant = currentUser?.role === 'accountant' || currentUser?.role === 'admin';
+  const canAccessBusinessOffice =
+    isDemoMode || currentUser?.role === 'accountant' || currentUser?.role === 'admin';
+  const canAccessUserAdmin = isDemoMode || currentUser?.role === 'admin';
 
   return (
     <>
@@ -46,16 +49,16 @@ export default function Navbar({ activeTab, setActiveTab }) {
             {/* Navigation & Role Controls */}
             <div className="flex items-center space-x-3 sm:space-x-4">
               
-              {/* Role Switcher Pill (Great for pairing/testing and demo) */}
+              {/* View & Role Switcher Pill */}
               <div className="bg-slate-800/80 p-1 rounded-lg border border-slate-700 flex items-center text-xs">
                 <button
                   type="button"
                   onClick={() => {
-                    switchDemoRole('employee');
+                    if (isDemoMode) switchDemoRole('employee');
                     setActiveTab('employee');
                   }}
                   className={`px-3 py-1.5 rounded-md font-medium transition-all flex items-center gap-1.5 ${
-                    !isAccountant
+                    activeTab === 'employee'
                       ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
                       : 'text-slate-300 hover:text-white'
                   }`}
@@ -64,22 +67,44 @@ export default function Navbar({ activeTab, setActiveTab }) {
                   <span className="hidden md:inline">Staff Faculty</span>
                   <span className="md:hidden">Faculty</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    switchDemoRole('accountant');
-                    setActiveTab('accountant');
-                  }}
-                  className={`px-3 py-1.5 rounded-md font-medium transition-all flex items-center gap-1.5 ${
-                    isAccountant
-                      ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
-                      : 'text-slate-300 hover:text-white'
-                  }`}
-                >
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span className="hidden md:inline">Business Office / Admin</span>
-                  <span className="md:hidden">Approver</span>
-                </button>
+
+                {canAccessBusinessOffice && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isDemoMode) switchDemoRole('accountant');
+                      setActiveTab('accountant');
+                    }}
+                    className={`px-3 py-1.5 rounded-md font-medium transition-all flex items-center gap-1.5 ${
+                      activeTab === 'accountant'
+                        ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span className="hidden md:inline">Business Office</span>
+                    <span className="md:hidden">Approver</span>
+                  </button>
+                )}
+
+                {canAccessUserAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isDemoMode) switchDemoRole('admin');
+                      setActiveTab('users');
+                    }}
+                    className={`px-3 py-1.5 rounded-md font-medium transition-all flex items-center gap-1.5 ${
+                      activeTab === 'users'
+                        ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    <span className="hidden md:inline">User Management</span>
+                    <span className="md:hidden">Users</span>
+                  </button>
+                )}
               </div>
 
               {/* User Profile / Auth */}

@@ -6,12 +6,13 @@ import EmployeeDashboard from './components/EmployeeView/EmployeeDashboard';
 import POFormModal from './components/EmployeeView/POFormModal';
 import AccountantDashboard from './components/AccountantView/AccountantDashboard';
 import ApprovalModal from './components/AccountantView/ApprovalModal';
+import UserManagement from './components/AdminView/UserManagement';
 import PODetailModal from './components/Common/PODetailModal';
 import { AlertTriangle, Lock } from 'lucide-react';
 
 function MainPortal() {
   const { currentUser, authError, setAuthError } = useAuth();
-  const [activeTab, setActiveTab] = useState('employee'); // 'employee' | 'accountant'
+  const [activeTab, setActiveTab] = useState('employee'); // 'employee' | 'accountant' | 'users'
 
   // Modal states
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -58,16 +59,18 @@ function MainPortal() {
 
       {/* Main App Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {activeTab === 'employee' ? (
+        {activeTab === 'users' ? (
+          <UserManagement />
+        ) : activeTab === 'accountant' ? (
+          <AccountantDashboard
+            onSelectPO={(po) => setSelectedPO(po)}
+            onOpenActionModal={(po) => setActionPO(po)}
+          />
+        ) : (
           <EmployeeDashboard
             onOpenNewPO={handleOpenNewPO}
             onSelectPO={(po) => setSelectedPO(po)}
             onEditPO={handleEditPO}
-          />
-        ) : (
-          <AccountantDashboard
-            onSelectPO={(po) => setSelectedPO(po)}
-            onOpenActionModal={(po) => setActionPO(po)}
           />
         )}
       </main>

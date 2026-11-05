@@ -9,8 +9,17 @@ import {
   isDomainAllowed,
   ALLOWED_DOMAINS
 } from '../config/firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { DEMO_USERS } from '../config/defaultData';
+import {
+  collection,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  serverTimestamp
+} from 'firebase/firestore';
+import { DEMO_USERS, INITIAL_DIRECTORY_USERS } from '../config/defaultData';
 
 const AuthContext = createContext(null);
 
@@ -22,11 +31,48 @@ const ACCOUNTANT_EMAILS = (import.meta.env.VITE_ACCOUNTANT_EMAILS || 'acctspay@w
   .split(',')
   .map(e => e.trim().toLowerCase());
 
+const DEMO_USERS_STORAGE_KEY = 'wca_directory_users_v1';
+
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
+  const [usersList, setUsersList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
   const [isDemoMode, setIsDemoMode] = useState(!isFirebaseConfigured);
+
+  // Sync Users Directory from Firestore (or localStorage in Demo Mode)
+  useEffect(() => {
+    if (isFirebaseConfigured && db) {
+      const usersRef = collection(db, 'users');
+      const unsubUsers = onSnapshot(
+        usersRef,
+        (snapshot) => {
+          const loaded = snapshot.docs.map(d => ({
+            id: d.id,
+            ...d.data()
+          }));
+          setUsersList(loaded);
+        },
+        (err) => {
+          console.warn('Could not subscribe to users collection:', err);
+          setUsersList(INITIAL_DIRECTORY_USERS);
+        }
+      );
+      return () => unsubUsers();
+    } else {
+      const saved = localStorage.getItem(DEMO_USERS_STORAGE_KEY);
+      if (saved) {
+        try {
+          setUsersList(JSON.parse(saved));
+        } catch {
+          setUsersList(INITIAL_DIRECTORY_USERS);
+        }
+      } else {
+        setUsersList(INITIAL_DIRECTORY_USERS);
+        localStorage.setItem(DEMO_USERS_STORAGE_KEY, JSON.stringify(INITIAL_DIRECTORY_USERS));
+      }
+    }
+  }, []);
 
   // Initialize Auth state
   useEffect(() => {
@@ -44,42 +90,75 @@ export function AuthProvider({ children }) {
             return;
           }
 
-          // Check role: first from Firestore user doc, then accountant list, then local override, else 'employee'
+          // Determine role from .env lists and Firestore user profile
           let role = 'employee';
+          let department = 'Faculty / Staff';
           const emailLower = user.email.toLowerCase();
 
           if (ADMIN_EMAILS.includes(emailLower)) {
             role = 'admin';
+            department = 'IT & Administration';
           } else if (ACCOUNTANT_EMAILS.includes(emailLower)) {
             role = 'accountant';
+            department = 'Accounting & Business Office';
           }
 
           if (db) {
             try {
               const userDocRef = doc(db, 'users', user.uid);
               const userSnap = await getDoc(userDocRef);
-              if (userSnap.exists() && userSnap.data().role) {
-                role = userSnap.data().role;
+
+              // Also check if an admin pre-authorized this email prior to first login
+              const preAuthId = `pre_${emailLower.replace(/[^a-z0-9]/g, '_')}`;
+              const preAuthRef = doc(db, 'users', preAuthId);
+              const preAuthSnap = await getDoc(preAuthRef);
+
+              if (preAuthSnap.exists()) {
+                const preData = preAuthSnap.data();
+                if (preData.role) role = preData.role;
+                if (preData.department) department = preData.department;
+                await deleteDoc(preAuthRef).catch(() => {});
+              }
+
+              if (userSnap.exists()) {
+                const existingData = userSnap.data();
+                if (existingData.department) {
+                  department = existingData.department;
+                }
+                // Respect Firestore role unless .env explicitly grants higher role
+                if (ADMIN_EMAILS.includes(emailLower)) {
+                  role = 'admin';
+                } else if (ACCOUNTANT_EMAILS.includes(emailLower) && (!existingData.role || existingData.role === 'employee')) {
+                  role = 'accountant';
+                } else if (existingData.role) {
+                  role = existingData.role;
+                }
+
+                await setDoc(userDocRef, {
+                  uid: user.uid,
+                  displayName: user.displayName || existingData.displayName || user.email.split('@')[0],
+                  email: emailLower,
+                  photoURL: user.photoURL || existingData.photoURL || '',
+                  role: role,
+                  department: department,
+                  last_login: serverTimestamp()
+                }, { merge: true });
               } else {
                 // First-time sign in: save profile to Firestore
                 await setDoc(userDocRef, {
                   uid: user.uid,
                   displayName: user.displayName || user.email.split('@')[0],
-                  email: user.email,
+                  email: emailLower,
                   photoURL: user.photoURL || '',
                   role: role,
+                  department: department,
                   created_at: serverTimestamp(),
                   last_login: serverTimestamp()
                 }, { merge: true });
               }
             } catch (err) {
-              console.warn('Could not read user profile from Firestore:', err);
+              console.warn('Could not read/write user profile in Firestore:', err);
             }
-          }
-
-          const localOverride = localStorage.getItem(`wca_role_${user.uid}`);
-          if (localOverride) {
-            role = localOverride;
           }
 
           setCurrentUser({
@@ -87,7 +166,8 @@ export function AuthProvider({ children }) {
             displayName: user.displayName || user.email.split('@')[0],
             email: user.email,
             photoURL: user.photoURL,
-            role: role
+            role: role,
+            department: department
           });
           setAuthError(null);
         } else {
@@ -97,9 +177,9 @@ export function AuthProvider({ children }) {
       });
       return () => unsubscribe();
     } else {
-      // In Demo Mode: load saved demo user from localStorage or default to employee
-      const savedUserKey = localStorage.getItem('wca_demo_user_role') || 'employee';
-      setCurrentUser(DEMO_USERS[savedUserKey] || DEMO_USERS.employee);
+      // In Demo Mode: load saved demo user from localStorage or default to admin
+      const savedUserKey = localStorage.getItem('wca_demo_user_role') || 'admin';
+      setCurrentUser(DEMO_USERS[savedUserKey] || DEMO_USERS.admin);
       setIsDemoMode(true);
       setLoading(false);
     }
@@ -140,21 +220,129 @@ export function AuthProvider({ children }) {
     setCurrentUser(null);
   };
 
-  // Demo / Dev Mode role switch (Employee vs Accountant)
+  // Demo / Dev Mode role switch (Employee vs Accountant vs Admin)
   const switchDemoRole = (roleKey) => {
-    if (DEMO_USERS[roleKey]) {
+    if (isDemoMode && DEMO_USERS[roleKey]) {
       setCurrentUser(DEMO_USERS[roleKey]);
       localStorage.setItem('wca_demo_user_role', roleKey);
-    } else if (currentUser) {
-      // If signed in with real account, allow testing role toggle
-      const updated = { ...currentUser, role: roleKey };
-      setCurrentUser(updated);
-      localStorage.setItem(`wca_role_${currentUser.uid}`, roleKey);
+    }
+  };
+
+  // Helper to sync demo user directory
+  const syncDemoUsers = (nextList) => {
+    setUsersList(nextList);
+    localStorage.setItem(DEMO_USERS_STORAGE_KEY, JSON.stringify(nextList));
+  };
+
+  // Update a user's role ('employee' | 'accountant' | 'admin')
+  const updateUserRole = async (userId, newRole) => {
+    if (!userId || !newRole) return;
+    if (isFirebaseConfigured && db) {
+      await updateDoc(doc(db, 'users', userId), {
+        role: newRole,
+        updated_at: serverTimestamp()
+      });
+    } else {
+      const updated = usersList.map(u =>
+        (u.id === userId || u.uid === userId) ? { ...u, role: newRole } : u
+      );
+      syncDemoUsers(updated);
+    }
+
+    if (currentUser && (currentUser.uid === userId || currentUser.id === userId)) {
+      setCurrentUser(prev => prev ? { ...prev, role: newRole } : prev);
+    }
+  };
+
+  // Update a user's department
+  const updateUserDepartment = async (userId, newDepartment) => {
+    if (!userId) return;
+    if (isFirebaseConfigured && db) {
+      await updateDoc(doc(db, 'users', userId), {
+        department: newDepartment,
+        updated_at: serverTimestamp()
+      });
+    } else {
+      const updated = usersList.map(u =>
+        (u.id === userId || u.uid === userId) ? { ...u, department: newDepartment } : u
+      );
+      syncDemoUsers(updated);
+    }
+
+    if (currentUser && (currentUser.uid === userId || currentUser.id === userId)) {
+      setCurrentUser(prev => prev ? { ...prev, department: newDepartment } : prev);
+    }
+  };
+
+  // Pre-authorize or add a user by email
+  const addOrPreauthorizeUser = async ({ displayName, email, role = 'employee', department = 'Faculty / Staff' }) => {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      throw new Error('Please enter a valid @wcatrojans.org email address.');
+    }
+
+    const existing = usersList.find(u => u.email?.toLowerCase() === cleanEmail);
+    const docId = existing?.id || `pre_${cleanEmail.replace(/[^a-z0-9]/g, '_')}`;
+    const payload = {
+      uid: existing?.uid || docId,
+      displayName: (displayName || cleanEmail.split('@')[0]).trim(),
+      email: cleanEmail,
+      role,
+      department: (department || 'Faculty / Staff').trim(),
+      photoURL: existing?.photoURL || '',
+      last_login: existing?.last_login || null
+    };
+
+    if (isFirebaseConfigured && db) {
+      await setDoc(doc(db, 'users', docId), {
+        ...payload,
+        updated_at: serverTimestamp()
+      }, { merge: true });
+    } else {
+      const existsIdx = usersList.findIndex(u => u.id === docId || u.email?.toLowerCase() === cleanEmail);
+      if (existsIdx >= 0) {
+        const next = [...usersList];
+        next[existsIdx] = { ...next[existsIdx], ...payload, id: docId };
+        syncDemoUsers(next);
+      } else {
+        syncDemoUsers([{ ...payload, id: docId }, ...usersList]);
+      }
+    }
+  };
+
+  // Remove a user from directory
+  const deleteDirectoryUser = async (userId) => {
+    if (!userId) return;
+    if (isFirebaseConfigured && db) {
+      await deleteDoc(doc(db, 'users', userId));
+    } else {
+      syncDemoUsers(usersList.filter(u => u.id !== userId && u.uid !== userId));
+    }
+  };
+
+  // Seed default WCA staff & approvers into Firestore
+  const seedDefaultUsers = async () => {
+    if (isFirebaseConfigured && db) {
+      for (const usr of INITIAL_DIRECTORY_USERS) {
+        // Avoid overwriting an already-linked real Google UID with the same email
+        const alreadyByEmail = usersList.find(
+          u => u.email?.toLowerCase() === usr.email.toLowerCase() && u.id !== usr.id
+        );
+        const targetId = alreadyByEmail ? alreadyByEmail.id : usr.id;
+        await setDoc(doc(db, 'users', targetId), {
+          ...usr,
+          uid: alreadyByEmail?.uid || usr.uid,
+          updated_at: serverTimestamp()
+        }, { merge: true });
+      }
+    } else {
+      syncDemoUsers(INITIAL_DIRECTORY_USERS);
     }
   };
 
   const value = {
     currentUser,
+    usersList,
     loading,
     authError,
     setAuthError,
@@ -162,6 +350,11 @@ export function AuthProvider({ children }) {
     loginWithGoogle,
     logout,
     switchDemoRole,
+    updateUserRole,
+    updateUserDepartment,
+    addOrPreauthorizeUser,
+    deleteDirectoryUser,
+    seedDefaultUsers,
     allowedDomains: ALLOWED_DOMAINS
   };
 
