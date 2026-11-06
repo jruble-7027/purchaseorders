@@ -143,12 +143,15 @@ export function POProvider({ children }) {
     if (isFirebaseConfigured && storage) {
       const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
       const storageRef = ref(storage, `receipts/${poNumber}/${Date.now()}_${sanitizedName}`);
-      const uploadResult = await uploadBytes(storageRef, file);
+      const inferredType =
+        file.type ||
+        (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream');
+      const uploadResult = await uploadBytes(storageRef, file, { contentType: inferredType });
       const downloadUrl = await getDownloadURL(uploadResult.ref);
       return {
         name: file.name,
         url: downloadUrl,
-        type: file.type,
+        type: inferredType,
         size: file.size,
         uploaded_at: new Date().toISOString()
       };

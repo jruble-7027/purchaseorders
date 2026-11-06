@@ -7,12 +7,15 @@ service firebase.storage {
     }
     
     function isAllowedFileType() {
-      return request.resource.contentType.matches('image/.*') || 
-             request.resource.contentType == 'application/pdf';
+      return request.resource.contentType == null ||
+             request.resource.contentType.matches('image/.*') || 
+             request.resource.contentType.matches('application/pdf') ||
+             request.resource.contentType.matches('application/x-pdf') ||
+             request.resource.contentType.matches('application/octet-stream');
     }
     
     function isValidFileSize() {
-      return request.resource.size < 10 * 1024 * 1024; // 10 MB limit
+      return request.resource.size < 25 * 1024 * 1024; // 25 MB limit
     }
 
     match /receipts/{poNumber}/{fileName} {
@@ -20,7 +23,8 @@ service firebase.storage {
       allow read: if isAuthenticated();
       
       // Allow upload only if authenticated, valid file type and under size limit
-      allow write: if isAuthenticated() && isAllowedFileType() && isValidFileSize();
+      allow create, update: if isAuthenticated() && isAllowedFileType() && isValidFileSize();
+      allow delete: if isAuthenticated();
     }
   }
 }
