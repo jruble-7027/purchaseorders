@@ -1,70 +1,156 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId} (Firebase Auth UID or pre_{email})
+    // Fields:
+    //   - uid: string
+    //   - displayName: string
+    //   - email: string (@wcatrojans.org or @wesleyan.edu)
+    //   - role: string ('employee' | 'accountant' | 'admin')
+    //   - department: string
+    //   - photoURL: string (optional)
+    //   - created_at: timestamp (optional)
+    //   - updated_at: timestamp (optional)
+    //   - last_login: timestamp | string (optional)
+    //
+    // Collection: expense_accounts
+    // Document ID: {accountId} (e.g., ACCT-566400)
+    // Fields:
+    //   - id: string
+    //   - name: string
+    //   - budget: number
+    //   - dept: string
+    //
+    // Collection: purchase_orders
+    // Document ID: {poId}
+    // Fields:
+    //   - id: string
+    //   - po_number: string
+    //   - po_year: number
+    //   - created_by: string (UID)
+    //   - employee_name: string
+    //   - employee_email: string
+    //   - vendor_name: string
+    //   - purchase_date: string
+    //   - department_account_id: string
+    //   - school_purpose: string
+    //   - items: list
+    //   - total_amount: number
+    //   - receipt_urls: list
+    //   - status: string ('draft' | 'pending_approval' | 'approved' | 'rejected' | 'paid')
+    //   - created_at: timestamp | string
+    //   - updated_at: timestamp | string
+    //   - audit_logs: list
+    //
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
     // Check if user is authenticated with Firebase
     function isAuthenticated() {
       return request.auth != null;
     }
-    
-    // Check institutional domain
+
+    // Check institutional domain (@wcatrojans.org or @wesleyan.edu)
     function isWcaMember() {
-      return isAuthenticated() && (
-        request.auth.token.email.matches('(?i).*@wcatrojans[.]org$') ||
-        request.auth.token.email.matches('(?i).*@wesleyan[.]edu$')
-      );
+      return isAuthenticated() &&
+        request.auth.token.email != null &&
+        request.auth.token.email.lower().matches('.*@(wcatrojans\\.org|wesleyan\\.edu)$');
     }
-    
-    // Safely check if user is an accountant without crashing on missing user documents
+
+    // Safely check if user is an accountant or admin without crashing on missing user documents
     function isAccountant() {
-      return isAuthenticated() && (
-        (request.auth.token != null && 'role' in request.auth.token && request.auth.token.role in ['accountant', 'admin']) ||
+      return isWcaMember() && (
+        request.auth.token.email.lower() in [
+          'jruble@wcatrojans.org',
+          'acctspay@wcatrojans.org',
+          'acctpay@wcatrojans.org',
+          'businessoffice@wcatrojans.org'
+        ] ||
+        request.auth.token.get('role', '') in ['accountant', 'admin'] ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'employee') in ['accountant', 'admin'])
       );
     }
 
-    // User profile collection
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    // User profile collection (with privilege escalation protection)
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && (request.auth.uid == userId || isAccountant());
+      allow read: if isWcaMember();
+
+      allow create: if isWcaMember() && (
+        isAccountant() ||
+        (request.auth.uid == userId && (
+          request.resource.data.get('role', 'employee') == 'employee' ||
+          (exists(/databases/$(database)/documents/users/$('pre_' + request.auth.token.email.lower())) &&
+           request.resource.data.get('role', 'employee') == get(/databases/$(database)/documents/users/$('pre_' + request.auth.token.email.lower())).data.get('role', 'employee'))
+        ))
+      );
+
+      allow update: if isWcaMember() && (
+        isAccountant() ||
+        (request.auth.uid == userId &&
+         request.resource.data.get('role', 'employee') == resource.data.get('role', 'employee'))
+      );
+
+      allow delete: if isWcaMember() && (
+        isAccountant() ||
+        (userId.matches('^pre_.*') &&
+         resource.data.get('email', '').lower() == request.auth.token.email.lower())
+      );
     }
 
-    // Expense accounts reference list (e.g. ACCT-566400, ACCT-566425)
+    // Expense accounts reference list (Chart of Accounts)
     match /expense_accounts/{accountId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if isWcaMember();
+      allow write: if isAccountant();
     }
 
-    // Purchase orders collection
+    // Purchase orders collection (with self-approval prevention)
     match /purchase_orders/{poId} {
-      // Any authenticated user can read POs (dashboard lists & status tracking)
-      allow read: if isAuthenticated();
-      
-      // Allow creation if user is authenticated and matches creator UID or email
-      allow create: if isAuthenticated() && (
-        request.resource.data.created_by == request.auth.uid ||
-        request.resource.data.employee_email == request.auth.token.email
-      );
-      
-      // Employees can update their own PO; Accountants can update any PO
-      allow update: if isAuthenticated() && (
-        resource.data.created_by == request.auth.uid ||
-        resource.data.employee_email == request.auth.token.email ||
-        isAccountant()
+      // Any authenticated WCA member can read POs (dashboard lists & sequential PO numbering)
+      allow read: if isWcaMember();
+
+      // Allow creation if WCA member matches creator UID or email and status is draft or pending_approval
+      allow create: if isWcaMember() &&
+        (request.resource.data.created_by == request.auth.uid ||
+         request.resource.data.get('employee_email', '').lower() == request.auth.token.email.lower()) &&
+        request.resource.data.get('status', 'pending_approval') in ['draft', 'pending_approval'];
+
+      // Employees can only update their own PO to 'draft' or 'pending_approval'; Accountants/Admins can update any PO
+      allow update: if isWcaMember() && (
+        isAccountant() ||
+        ((resource.data.created_by == request.auth.uid ||
+          resource.data.get('employee_email', '').lower() == request.auth.token.email.lower()) &&
+         request.resource.data.get('status', 'pending_approval') in ['draft', 'pending_approval'])
       );
 
-      // Only draft owners or accountants can delete
-      allow delete: if isAuthenticated() && (
-        (resource.data.created_by == request.auth.uid && resource.data.status == 'draft') ||
-        isAccountant()
+      // Only draft owners or accountants/admins can delete
+      allow delete: if isWcaMember() && (
+        isAccountant() ||
+        (resource.data.created_by == request.auth.uid &&
+         resource.data.get('status', '') == 'draft')
       );
 
       // Audit logs sub-collection for every PO
       match /audit_logs/{logId} {
-        allow read, create: if isAuthenticated();
+        allow read, create: if isWcaMember();
         allow update, delete: if false; // Audit logs are immutable
       }
+    }
+
+    // Default deny for all other collections/paths
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

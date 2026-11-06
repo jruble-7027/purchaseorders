@@ -109,15 +109,20 @@ export function AuthProvider({ children }) {
               const userSnap = await getDoc(userDocRef);
 
               // Also check if an admin pre-authorized this email prior to first login
-              const preAuthId = `pre_${emailLower.replace(/[^a-z0-9]/g, '_')}`;
-              const preAuthRef = doc(db, 'users', preAuthId);
-              const preAuthSnap = await getDoc(preAuthRef);
+              const preAuthExactId = `pre_${emailLower}`;
+              const preAuthLegacyId = `pre_${emailLower.replace(/[^a-z0-9]/g, '_')}`;
+              const preAuthExactRef = doc(db, 'users', preAuthExactId);
+              const preAuthLegacyRef = doc(db, 'users', preAuthLegacyId);
+              const [preExactSnap, preLegacySnap] = await Promise.all([
+                getDoc(preAuthExactRef),
+                getDoc(preAuthLegacyRef)
+              ]);
 
-              if (preAuthSnap.exists()) {
-                const preData = preAuthSnap.data();
+              const activePreSnap = preExactSnap.exists() ? preExactSnap : (preLegacySnap.exists() ? preLegacySnap : null);
+              if (activePreSnap) {
+                const preData = activePreSnap.data();
                 if (preData.role) role = preData.role;
                 if (preData.department) department = preData.department;
-                await deleteDoc(preAuthRef).catch(() => {});
               }
 
               if (userSnap.exists()) {
@@ -155,6 +160,14 @@ export function AuthProvider({ children }) {
                   created_at: serverTimestamp(),
                   last_login: serverTimestamp()
                 }, { merge: true });
+              }
+
+              // Clean up consumed pre-authorization doc(s) after user profile is saved
+              if (preExactSnap.exists()) {
+                await deleteDoc(preAuthExactRef).catch(() => {});
+              }
+              if (preLegacySnap.exists()) {
+                await deleteDoc(preAuthLegacyRef).catch(() => {});
               }
             } catch (err) {
               console.warn('Could not read/write user profile in Firestore:', err);
@@ -206,6 +219,36 @@ export function AuthProvider({ children }) {
       );
     }
   }, [usersList, currentUser, isDemoMode]);
+
+  // Automatic 60-Minute Idle Session Timeout for Signed-In Users
+  useEffect(() => {
+    if (!currentUser || isDemoMode || !isFirebaseConfigured || !auth) return;
+
+    const IDLE_TIMEOUT_MS = 60 * 60 * 1000; // 60 minutes
+    let idleTimer = null;
+
+    const resetIdleTimer = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(async () => {
+        try {
+          await firebaseSignOut(auth);
+          setCurrentUser(null);
+          setAuthError('Your session automatically signed out after 60 minutes of inactivity. Please sign in again.');
+        } catch (err) {
+          console.warn('Idle timeout sign-out failed:', err);
+        }
+      }, IDLE_TIMEOUT_MS);
+    };
+
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
+    activityEvents.forEach((evt) => window.addEventListener(evt, resetIdleTimer, { passive: true }));
+    resetIdleTimer();
+
+    return () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      activityEvents.forEach((evt) => window.removeEventListener(evt, resetIdleTimer));
+    };
+  }, [currentUser, isDemoMode]);
 
   // Login with Google Workspace SSO
   const loginWithGoogle = async () => {
@@ -304,7 +347,7 @@ export function AuthProvider({ children }) {
     }
 
     const existing = usersList.find(u => u.email?.toLowerCase() === cleanEmail);
-    const docId = existing?.id || `pre_${cleanEmail.replace(/[^a-z0-9]/g, '_')}`;
+    const docId = existing?.id || `pre_${cleanEmail}`;
     const payload = {
       uid: existing?.uid || docId,
       displayName: (displayName || cleanEmail.split('@')[0]).trim(),

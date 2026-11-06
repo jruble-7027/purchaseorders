@@ -2,8 +2,10 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     
-    function isAuthenticated() {
-      return request.auth != null;
+    function isWcaMember() {
+      return request.auth != null &&
+             request.auth.token.email != null &&
+             request.auth.token.email.lower().matches('.*@(wcatrojans[.]org|wesleyan[.]edu)$');
     }
     
     function isAllowedFileType() {
@@ -19,12 +21,12 @@ service firebase.storage {
     }
 
     match /receipts/{poNumber}/{fileName} {
-      // Any authenticated user from the school can view receipts
-      allow read: if isAuthenticated();
+      // Only authenticated Wesleyan Christian Academy users can view receipts
+      allow read: if isWcaMember();
       
-      // Allow upload only if authenticated, valid file type and under size limit
-      allow create, update: if isAuthenticated() && isAllowedFileType() && isValidFileSize();
-      allow delete: if isAuthenticated();
+      // Allow upload only if authenticated WCA user, valid file type and under size limit
+      allow create, update: if isWcaMember() && isAllowedFileType() && isValidFileSize();
+      allow delete: if isWcaMember();
     }
   }
 }
