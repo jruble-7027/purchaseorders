@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { usePOs } from '../../context/POContext';
 import {
@@ -11,10 +11,146 @@ import {
   Building,
   CreditCard,
   Calendar,
-  Layers,
+  Search,
+  ChevronDown,
   Save,
   Send
 } from 'lucide-react';
+
+/**
+ * Searchable Account # selector.
+ * When user types digits (e.g. "566"), only accounts whose account number starts with "566" appear.
+ */
+function SearchableAccountSelect({
+  accounts = [],
+  value,
+  onChange,
+  placeholder = 'Type account # (e.g. 566)...',
+  compact = false
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const containerRef = useRef(null);
+
+  const selectedAccount = accounts.find((a) => a.id === value);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+        setQuery('');
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filteredAccounts = accounts.filter((acct) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    const rawNum = acct.id.replace(/^acct-/i, '').toLowerCase();
+    const fullId = acct.id.toLowerCase();
+    // If user enters numbers (or "acct-566"), strictly match accounts starting with those digits
+    if (/^(acct-)?\d+$/.test(q)) {
+      const digits = q.replace(/^acct-/, '');
+      return rawNum.startsWith(digits);
+    }
+    return (
+      rawNum.startsWith(q) ||
+      fullId.startsWith(q) ||
+      (acct.name || '').toLowerCase().includes(q)
+    );
+  });
+
+  const displayValue = isOpen
+    ? query
+    : selectedAccount
+    ? `${selectedAccount.id} — ${selectedAccount.name}`
+    : value || '';
+
+  return (
+    <div ref={containerRef} className="relative w-full">
+      <div className="relative">
+        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <input
+          type="text"
+          value={displayValue}
+          placeholder={placeholder}
+          onFocus={() => {
+            setIsOpen(true);
+            setQuery('');
+          }}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setIsOpen(true);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && isOpen && filteredAccounts.length > 0) {
+              e.preventDefault();
+              onChange(filteredAccounts[0].id);
+              setIsOpen(false);
+              setQuery('');
+            } else if (e.key === 'Escape') {
+              setIsOpen(false);
+              setQuery('');
+            }
+          }}
+          className={`w-full pl-8 pr-7 ${
+            compact ? 'py-1.5 text-xs' : 'py-2 text-sm'
+          } border border-slate-300 rounded-lg bg-white font-semibold text-slate-800 focus:ring-2 focus:ring-[#0C2340] focus:border-transparent outline-none`}
+        />
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={() => {
+            setIsOpen((prev) => !prev);
+            setQuery('');
+          }}
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+        >
+          <ChevronDown className="w-4 h-4" />
+        </button>
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-40 mt-1 w-full max-h-52 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-xl divide-y divide-slate-100 text-xs">
+          {filteredAccounts.length === 0 ? (
+            <div className="px-3 py-2.5 text-slate-400 italic">
+              No accounts starting with "{query}"
+            </div>
+          ) : (
+            filteredAccounts.map((acct) => {
+              const isSelected = acct.id === value;
+              return (
+                <button
+                  key={acct.id}
+                  type="button"
+                  onClick={() => {
+                    onChange(acct.id);
+                    setIsOpen(false);
+                    setQuery('');
+                  }}
+                  className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-amber-50 transition ${
+                    isSelected ? 'bg-amber-50/80 font-bold text-[#0C2340]' : 'text-slate-700'
+                  }`}
+                >
+                  <div>
+                    <span className="font-mono font-bold text-[#0C2340]">{acct.id}</span>
+                    <span className="mx-1.5 text-slate-300">—</span>
+                    <span className="font-medium">{acct.name}</span>
+                  </div>
+                  {acct.dept && (
+                    <span className="text-[10px] text-slate-400 ml-2 truncate">{acct.dept}</span>
+                  )}
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function POFormModal({ isOpen, onClose, initialData = null }) {
   const { currentUser } = useAuth();
@@ -43,23 +179,27 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
   const [poYear, setPoYear] = useState(initialPOYear);
   const [manualYearOverride, setManualYearOverride] = useState(false);
 
-  const [departmentAccountId, setDepartmentAccountId] = useState(defaultAccountId);
-  const [schoolPurpose, setSchoolPurpose] = useState(initialData?.school_purpose || '');
+  const [departmentAccountId, setDepartmentAccountId] = useState(
+    initialData?.department_account_id || ''
+  );
 
-  // Normalize existing items or initialize first blank row with: ACCT + Vendor + Description + Amount + S/H + Tax
+  // Normalize existing items or initialize first blank row
   const normalizeInitialItems = () => {
     if (initialData?.items && initialData.items.length > 0) {
       return initialData.items.map((it, idx) => {
-        const legacyAmount =
-          it.amount !== undefined && it.amount !== ''
+        const legacyUnitOrAmount =
+          it.unit_price !== undefined && it.unit_price !== ''
+            ? it.unit_price
+            : it.amount !== undefined && it.amount !== ''
             ? it.amount
-            : (parseFloat(it.qty) || 1) * (parseFloat(it.unit_price) || 0);
+            : 0;
         return {
           id: it.id || `item_${idx + 1}`,
+          qty: it.qty !== undefined && it.qty !== '' ? String(it.qty) : '1',
           account_id: it.account_id || initialData.department_account_id || defaultAccountId,
           vendor: it.vendor || '',
           description: it.description || '',
-          amount: legacyAmount !== 0 ? String(legacyAmount) : '',
+          amount: Number(legacyUnitOrAmount) !== 0 ? String(legacyUnitOrAmount) : '',
           shipping_handling:
             it.shipping_handling !== undefined && Number(it.shipping_handling) !== 0
               ? String(it.shipping_handling)
@@ -71,6 +211,7 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
     return [
       {
         id: 'item_1',
+        qty: '1',
         account_id: defaultAccountId,
         vendor: '',
         description: '',
@@ -94,11 +235,13 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
 
   // Row calculations helper
   const computeRowNumbers = (item) => {
-    const amount = parseFloat(item.amount) || 0;
+    const qty = poType === 'standard' ? Math.max(1, parseFloat(item.qty) || 1) : 1;
+    const unitAmount = parseFloat(item.amount) || 0;
+    const baseAmount = qty * unitAmount;
     const sh = parseFloat(item.shipping_handling) || 0;
     const tax = parseFloat(item.tax) || 0;
-    const total = amount + sh + tax;
-    return { amount, sh, tax, total };
+    const total = baseAmount + sh + tax;
+    return { qty, unitAmount, amount: baseAmount, sh, tax, total };
   };
 
   // Handle Item row updates
@@ -109,11 +252,12 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
   };
 
   const handleAddItem = () => {
-    const lastAccount = items[items.length - 1]?.account_id || departmentAccountId;
+    const lastAccount = items[items.length - 1]?.account_id || departmentAccountId || defaultAccountId;
     setItems([
       ...items,
       {
         id: `item_${Date.now()}`,
+        qty: '1',
         account_id: lastAccount,
         vendor: '',
         description: '',
@@ -133,12 +277,15 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
   const summaryTotals = items.reduce(
     (acc, item) => {
       const { amount, sh, tax, total } = computeRowNumbers(item);
-      const acctId = item.account_id || departmentAccountId;
+      const acctId =
+        poType === 'standard'
+          ? departmentAccountId || defaultAccountId
+          : item.account_id || departmentAccountId || defaultAccountId;
       acc.subtotalAmount += amount;
       acc.totalSH += sh;
       acc.totalTax += tax;
       acc.grandTotal += total;
-      if (total > 0 || amount > 0) {
+      if ((total > 0 || amount > 0) && acctId) {
         acc.byAccount[acctId] = (acc.byAccount[acctId] || 0) + total;
       }
       return acc;
@@ -171,17 +318,18 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
         setErrorMsg('Please enter a Vendor / Supplier or Credit Card Name (e.g. Visa-4826).');
         return;
       }
-      if (!schoolPurpose.trim()) {
-        setErrorMsg('Please describe the school educational purpose or justification.');
+      if (poType === 'standard' && !departmentAccountId) {
+        setErrorMsg('Please select a required ACCOUNT # for this Purchase Order.');
         return;
       }
 
       const validItems = items.filter((i) => {
         const { total } = computeRowNumbers(i);
-        return i.description.trim() && total > 0;
+        const hasAcct = poType === 'standard' ? Boolean(departmentAccountId) : Boolean(i.account_id);
+        return hasAcct && i.description.trim() && total > 0;
       });
       if (validItems.length === 0) {
-        setErrorMsg('Please provide at least one line item with an Account, Description, and Amount.');
+        setErrorMsg('Please provide at least one line item with a Description and Amount.');
         return;
       }
     }
@@ -189,15 +337,17 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
     try {
       setSubmitting(true);
 
+      const fallbackAcct = departmentAccountId || defaultAccountId;
       const computedItems = items.map((i, idx) => {
-        const { amount, sh, tax, total } = computeRowNumbers(i);
+        const { qty, unitAmount, amount, sh, tax, total } = computeRowNumbers(i);
+        const rowAcct = poType === 'standard' ? fallbackAcct : i.account_id || fallbackAcct;
         return {
           id: i.id || `item_${idx + 1}`,
-          account_id: i.account_id || departmentAccountId,
+          account_id: rowAcct,
           vendor: (i.vendor || '').trim() || vendorName.trim(),
           description: i.description.trim() || 'Item',
-          qty: 1,
-          unit_price: amount,
+          qty: qty,
+          unit_price: unitAmount,
           amount: amount,
           shipping_handling: sh,
           tax: tax,
@@ -205,8 +355,15 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
         };
       });
 
-      const primaryAccountId = computedItems[0]?.account_id || departmentAccountId;
+      const primaryAccountId =
+        poType === 'standard'
+          ? fallbackAcct
+          : computedItems[0]?.account_id || fallbackAcct;
       const distinctAccounts = Array.from(new Set(computedItems.map((i) => i.account_id)));
+      const autoPurpose = computedItems
+        .map((i) => i.description)
+        .filter(Boolean)
+        .join('; ');
 
       const poPayload = {
         po_type: poType,
@@ -215,7 +372,7 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
         po_year: Number(poYear),
         department_account_id: primaryAccountId,
         account_ids: distinctAccounts,
-        school_purpose: schoolPurpose.trim(),
+        school_purpose: initialData?.school_purpose || autoPurpose,
         items: computedItems,
         subtotal_amount: summaryTotals.subtotalAmount,
         shipping_handling_amount: summaryTotals.totalSH,
@@ -267,7 +424,7 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
               </span>
             </div>
             <p className="text-xs text-amber-300 mt-0.5">
-              Supports single-vendor POs and multi-account Credit Card statements (e.g., Visa-4826)
+              Supports single-account Standard POs and multi-account Credit Card POs (e.g., Visa-4826)
             </p>
           </div>
 
@@ -414,58 +571,39 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
                 ))}
               </select>
             </div>
-
-            {/* Purpose / Justification */}
-            <div className="md:col-span-12">
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                Educational Purpose / Requisition Justification *
-              </label>
-              <textarea
-                rows={2}
-                placeholder="Explain what these purchases are for (e.g. monthly Visa-4826 departmental supplies, lab equipment, athletics gear)..."
-                value={schoolPurpose}
-                onChange={(e) => setSchoolPurpose(e.target.value)}
-                className="w-full p-2.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0C2340] focus:border-transparent outline-none bg-white"
-              />
-            </div>
           </div>
 
-          {/* Section 2: Itemized Line Items (Order: ACCT + Vendor + Description : Amount + S/H + Tax) */}
+          {/* Section 2: ACCOUNT # (Left Side, Searchable & Required) + Line Items */}
           <div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
-              <div>
-                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-                  Itemized Purchase Entries (ACCT + Vendor + Description : Amount + S/H + Tax) *
-                </label>
-                <p className="text-[11px] text-slate-500">
-                  Assign each line item to its specific Expense Account (`ACCT`), Vendor/Merchant, Description, Base Amount, Shipping/Handling (`S/H`), and Tax.
-                </p>
-              </div>
-
-              {/* Default Account Helper for new rows */}
-              <div className="flex items-center gap-1.5 text-xs">
-                <Layers className="w-3.5 h-3.5 text-slate-400" />
-                <span className="text-slate-500 font-medium">Default New Row ACCT:</span>
-                <select
-                  value={departmentAccountId}
-                  onChange={(e) => setDepartmentAccountId(e.target.value)}
-                  className="px-2 py-1 text-xs border border-slate-300 rounded-md bg-white text-slate-700 font-medium"
-                >
-                  {expenseAccounts.map((acct) => (
-                    <option key={acct.id} value={acct.id}>
-                      {acct.id} — {acct.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            {/* Left-aligned Searchable ACCOUNT # Field */}
+            <div className="mb-3 max-w-md">
+              <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">
+                ACCOUNT # {poType === 'standard' ? '*' : '(Default for New Rows)'}
+              </label>
+              <SearchableAccountSelect
+                accounts={expenseAccounts}
+                value={departmentAccountId}
+                onChange={(acctId) => setDepartmentAccountId(acctId)}
+                placeholder="Start typing account # (e.g. 566)..."
+              />
             </div>
 
-            <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50/70">
+            <div className="border border-slate-200 rounded-xl overflow-visible bg-slate-50/70">
               {/* Desktop Column Header Row */}
-              <div className="hidden lg:grid lg:grid-cols-12 gap-2 px-3 py-2.5 bg-[#0C2340] text-white text-[11px] font-semibold uppercase tracking-wider items-center">
-                <div className="col-span-3">1. Account (ACCT)</div>
-                <div className="col-span-2">2. Vendor / Merchant</div>
-                <div className="col-span-3">3. Description</div>
+              <div className="hidden lg:grid lg:grid-cols-12 gap-2 px-3 py-2.5 bg-[#0C2340] text-white text-[11px] font-semibold uppercase tracking-wider items-center rounded-t-xl">
+                {poType === 'standard' ? (
+                  <>
+                    <div className="col-span-1 text-center">1. QTY</div>
+                    <div className="col-span-3">2. Vendor / Merchant</div>
+                    <div className="col-span-4">3. Description</div>
+                  </>
+                ) : (
+                  <>
+                    <div className="col-span-3">1. Account (ACCT)</div>
+                    <div className="col-span-2">2. Vendor / Merchant</div>
+                    <div className="col-span-3">3. Description</div>
+                  </>
+                )}
                 <div className="col-span-1 text-right">Amount ($)</div>
                 <div className="col-span-1 text-right">S/H ($)</div>
                 <div className="col-span-1 text-right">Tax ($)</div>
@@ -482,28 +620,42 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
                       key={item.id || idx}
                       className="grid grid-cols-1 lg:grid-cols-12 gap-2 items-center bg-white p-2.5 rounded-lg lg:rounded-none border lg:border-0 border-slate-200 shadow-sm lg:shadow-none"
                     >
-                      {/* 1. ACCT (Account Number) */}
-                      <div className="lg:col-span-3">
-                        <label className="block lg:hidden text-[10px] font-bold uppercase text-slate-500 mb-0.5">
-                          Account (ACCT)
-                        </label>
-                        <select
-                          value={item.account_id || departmentAccountId}
-                          onChange={(e) => handleItemChange(idx, 'account_id', e.target.value)}
-                          className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-md bg-slate-50/50 hover:bg-white focus:bg-white font-semibold text-slate-800 focus:ring-1 focus:ring-[#0C2340] outline-none"
-                        >
-                          {expenseAccounts.map((acct) => (
-                            <option key={acct.id} value={acct.id}>
-                              {acct.id} — {acct.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                      {poType === 'standard' ? (
+                        /* 1. QTY (Standard PO Mode) */
+                        <div className="lg:col-span-1">
+                          <label className="block lg:hidden text-[10px] font-bold uppercase text-slate-500 mb-0.5">
+                            1. QTY
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            placeholder="1"
+                            value={item.qty}
+                            onChange={(e) => handleItemChange(idx, 'qty', e.target.value)}
+                            className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-md text-center font-semibold text-slate-800 focus:ring-1 focus:ring-[#0C2340] outline-none"
+                          />
+                        </div>
+                      ) : (
+                        /* 1. ACCT (Credit Card PO Mode - Searchable!) */
+                        <div className="lg:col-span-3">
+                          <label className="block lg:hidden text-[10px] font-bold uppercase text-slate-500 mb-0.5">
+                            1. Account (ACCT)
+                          </label>
+                          <SearchableAccountSelect
+                            accounts={expenseAccounts}
+                            value={item.account_id || departmentAccountId || defaultAccountId}
+                            onChange={(acctId) => handleItemChange(idx, 'account_id', acctId)}
+                            placeholder="Type account # (e.g. 566)..."
+                            compact
+                          />
+                        </div>
+                      )}
 
                       {/* 2. Vendor / Merchant */}
-                      <div className="lg:col-span-2">
+                      <div className={poType === 'standard' ? 'lg:col-span-3' : 'lg:col-span-2'}>
                         <label className="block lg:hidden text-[10px] font-bold uppercase text-slate-500 mb-0.5">
-                          Vendor / Merchant
+                          2. Vendor / Merchant
                         </label>
                         <input
                           type="text"
@@ -519,9 +671,9 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
                       </div>
 
                       {/* 3. Description */}
-                      <div className="lg:col-span-3">
+                      <div className={poType === 'standard' ? 'lg:col-span-4' : 'lg:col-span-3'}>
                         <label className="block lg:hidden text-[10px] font-bold uppercase text-slate-500 mb-0.5">
-                          Item Description
+                          3. Description
                         </label>
                         <input
                           type="text"
@@ -611,7 +763,7 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
               </div>
 
               {/* Add Item & Totals Footer */}
-              <div className="p-3 bg-slate-100/80 border-t border-slate-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="p-3 bg-slate-100/80 border-t border-slate-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 rounded-b-xl">
                 <button
                   type="button"
                   onClick={handleAddItem}
@@ -652,7 +804,7 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
               </div>
             </div>
 
-            {/* Live Account Allocation Breakdown (Especially helpful for Credit Card / Multi-Account POs) */}
+            {/* Live Account Allocation Breakdown */}
             {Object.keys(summaryTotals.byAccount).length > 0 && (
               <div className="mt-3 p-3.5 rounded-xl bg-amber-50/60 border border-amber-200/80">
                 <div className="text-[11px] font-bold uppercase tracking-wider text-amber-900 mb-2">

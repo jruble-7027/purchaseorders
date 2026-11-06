@@ -124,26 +124,16 @@ export default function PODetailModal({ po, onClose, onOpenActionModal, onEditDr
             </div>
           </div>
 
-          {/* School Purpose */}
-          <div className="bg-amber-500/5 p-4 rounded-xl border border-amber-500/20">
-            <h4 className="text-xs font-bold text-[#0C2340] uppercase tracking-wider mb-1">
-              School Purpose / Educational Justification
-            </h4>
-            <p className="text-sm text-slate-700 leading-relaxed">
-              {po.school_purpose || 'No purpose description provided.'}
-            </p>
-          </div>
-
-          {/* Line Items Table (ACCT + Vendor + Description : Amount + S/H + Tax) */}
+          {/* Line Items Table */}
           <div>
             <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-              Itemized Purchase Entries (ACCT + Vendor + Description : Amount + S/H + Tax)
+              Itemized Purchase Entries
             </h4>
             <div className="border border-slate-200 rounded-lg overflow-x-auto">
               <table className="min-w-full divide-y divide-slate-200 text-xs">
                 <thead className="bg-slate-100 font-semibold text-slate-700">
                   <tr>
-                    <th className="px-3 py-2.5 text-left">ACCT</th>
+                    <th className="px-3 py-2.5 text-left">ACCT / QTY</th>
                     <th className="px-3 py-2.5 text-left">Vendor</th>
                     <th className="px-3 py-2.5 text-left">Description</th>
                     <th className="px-3 py-2.5 text-right w-24">Amount</th>
@@ -156,10 +146,11 @@ export default function PODetailModal({ po, onClose, onOpenActionModal, onEditDr
                   {(po.items || []).map((item, idx) => {
                     const acctId = item.account_id || po.department_account_id;
                     const acctInfo = expenseAccountsMap[acctId];
+                    const qty = Number(item.qty) || 1;
                     const baseAmt =
                       item.amount !== undefined
                         ? Number(item.amount) || 0
-                        : (Number(item.qty) || 1) * (Number(item.unit_price) || 0);
+                        : qty * (Number(item.unit_price) || 0);
                     const sh = Number(item.shipping_handling) || 0;
                     const tax = Number(item.tax) || 0;
                     const rowTotal = item.total !== undefined ? Number(item.total) || 0 : baseAmt + sh + tax;
@@ -167,7 +158,9 @@ export default function PODetailModal({ po, onClose, onOpenActionModal, onEditDr
                     return (
                       <tr key={idx} className="hover:bg-slate-50">
                         <td className="px-3 py-2.5 font-mono font-bold text-[#0C2340] whitespace-nowrap">
-                          <div>{acctId}</div>
+                          <div>
+                            {acctId} {qty > 1 ? `(Qty: ${qty})` : ''}
+                          </div>
                           {acctInfo?.name && (
                             <div className="text-[10px] font-sans font-normal text-slate-500">
                               {acctInfo.name}
