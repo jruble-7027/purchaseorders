@@ -145,7 +145,7 @@ export default function ApprovalModal({ po, isOpen, onClose }) {
               </label>
               <p className="text-[11px] text-slate-500">
                 {Number(selectedPOYear) !== currentPOYear
-                  ? `Will reassign to next sequential #: ${previewNextPONumber ? previewNextPONumber(selectedPOYear) : `PO-${selectedPOYear}-0001`}`
+                  ? `Will reassign to next sequential #: ${previewNextPONumber ? previewNextPONumber(selectedPOYear) : `PO-${selectedPOYear}-000001`}`
                   : `Currently assigned: ${po.po_number}`}
               </p>
             </div>

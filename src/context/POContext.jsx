@@ -115,7 +115,7 @@ export function POProvider({ children }) {
       .filter(n => !isNaN(n) && n > 0);
 
     const nextSeq = existingSeqs.length > 0 ? Math.max(...existingSeqs) + 1 : 1;
-    return `PO-${year}-${String(nextSeq).padStart(4, '0')}`;
+    return `PO-${year}-${String(nextSeq).padStart(6, '0')}`;
   };
 
   // Synchronous preview for UI modals

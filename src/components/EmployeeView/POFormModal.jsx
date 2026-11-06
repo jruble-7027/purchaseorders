@@ -403,7 +403,7 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
       ? initialData.po_number
       : previewNextPONumber
       ? previewNextPONumber(poYear)
-      : `PO-${poYear}-0001`;
+      : `PO-${poYear}-000001`;
   const yearOptions = Array.from(
     new Set([currentCalendarYear - 1, currentCalendarYear, currentCalendarYear + 1, Number(poYear)])
   ).sort((a, b) => a - b);
@@ -424,12 +424,12 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
               </span>
             </div>
             <p className="text-xs text-amber-300 mt-0.5">
-              Supports single-account Standard POs and multi-account Credit Card POs (e.g., Visa-4826)
+              Supports single-account Standard POs and multi-account Split Acct. POs (e.g., Visa-4826)
             </p>
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Mode Switcher: Standard vs Credit Card */}
+            {/* Mode Switcher: Standard vs Split Acct. */}
             <div className="bg-slate-800/90 p-1 rounded-lg border border-slate-700 flex items-center text-xs">
               <button
                 type="button"
@@ -458,7 +458,7 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
                 }`}
               >
                 <CreditCard className="w-3.5 h-3.5" />
-                <span>Credit Card PO</span>
+                <span>Split Acct. PO</span>
               </button>
             </div>
 
