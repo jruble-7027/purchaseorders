@@ -62,6 +62,7 @@ export default function UserManagement() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingDeptId, setEditingDeptId] = useState(null);
   const [editingDeptValue, setEditingDeptValue] = useState('');
+  const [confirmDeleteKey, setConfirmDeleteKey] = useState(null);
 
   // New user form state
   const [newUserName, setNewUserName] = useState('');
@@ -165,19 +166,13 @@ export default function UserManagement() {
         user.id === currentUser.uid);
     if (isSelf) return;
 
-    if (
-      !window.confirm(
-        `Remove ${user.displayName || user.email} from the user directory?`
-      )
-    ) {
-      return;
-    }
-
     try {
-      await deleteDirectoryUser(user.id || user.uid);
+      setConfirmDeleteKey(null);
+      await deleteDirectoryUser(user.id || user.uid, user.email);
       showToast(`Removed ${user.displayName || user.email} from directory.`);
     } catch (err) {
       console.error('Failed to delete user:', err);
+      showToast(`Error removing user: ${err.message || 'Permission denied'}`);
     }
   };
 
@@ -498,23 +493,42 @@ export default function UserManagement() {
 
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-right">
-                        <button
-                          type="button"
-                          disabled={isSelf}
-                          onClick={() => handleDeleteUser(user)}
-                          title={
-                            isSelf
-                              ? 'Cannot remove your own active administrator account'
-                              : 'Remove user from directory'
-                          }
-                          className={`p-1.5 rounded-lg transition ${
-                            isSelf
-                              ? 'text-slate-300 cursor-not-allowed'
-                              : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
-                          }`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {confirmDeleteKey === targetId ? (
+                          <div className="inline-flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteUser(user)}
+                              className="px-2.5 py-1 rounded-md bg-rose-600 hover:bg-rose-700 text-white font-semibold text-[11px] shadow-sm transition"
+                            >
+                              Remove
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteKey(null)}
+                              className="px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium text-[11px] transition"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={isSelf}
+                            onClick={() => setConfirmDeleteKey(targetId)}
+                            title={
+                              isSelf
+                                ? 'Cannot remove your own active administrator account'
+                                : 'Remove user from directory'
+                            }
+                            className={`p-1.5 rounded-lg transition ${
+                              isSelf
+                                ? 'text-slate-300 cursor-not-allowed'
+                                : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                            }`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );

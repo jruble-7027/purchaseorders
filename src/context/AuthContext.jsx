@@ -40,22 +40,24 @@ export function AuthProvider({ children }) {
   const [authError, setAuthError] = useState(null);
   const [isDemoMode, setIsDemoMode] = useState(!isFirebaseConfigured);
 
-  // Sync Users Directory from Firestore (or localStorage in Demo Mode)
+  // Sync Users Directory from Firestore once authenticated (or localStorage in Demo Mode)
   useEffect(() => {
-    if (isFirebaseConfigured && db) {
+    if (isFirebaseConfigured && db && !isDemoMode) {
+      if (!currentUser?.uid) {
+        return;
+      }
       const usersRef = collection(db, 'users');
       const unsubUsers = onSnapshot(
         usersRef,
         (snapshot) => {
           const loaded = snapshot.docs.map(d => ({
-            id: d.id,
-            ...d.data()
+            ...d.data(),
+            id: d.id
           }));
           setUsersList(loaded);
         },
         (err) => {
           console.warn('Could not subscribe to users collection:', err);
-          setUsersList(INITIAL_DIRECTORY_USERS);
         }
       );
       return () => unsubUsers();
@@ -72,7 +74,7 @@ export function AuthProvider({ children }) {
         localStorage.setItem(DEMO_USERS_STORAGE_KEY, JSON.stringify(INITIAL_DIRECTORY_USERS));
       }
     }
-  }, []);
+  }, [currentUser?.uid, isDemoMode]);
 
   // Initialize Auth state
   useEffect(() => {
@@ -302,11 +304,14 @@ export function AuthProvider({ children }) {
   // Update a user's role ('employee' | 'accountant' | 'admin')
   const updateUserRole = async (userId, newRole) => {
     if (!userId || !newRole) return;
-    if (isFirebaseConfigured && db) {
-      await updateDoc(doc(db, 'users', userId), {
+    setUsersList(prev =>
+      prev.map(u => (u.id === userId || u.uid === userId) ? { ...u, role: newRole } : u)
+    );
+    if (isFirebaseConfigured && db && !isDemoMode) {
+      await setDoc(doc(db, 'users', userId), {
         role: newRole,
         updated_at: serverTimestamp()
-      });
+      }, { merge: true });
     } else {
       const updated = usersList.map(u =>
         (u.id === userId || u.uid === userId) ? { ...u, role: newRole } : u
@@ -322,11 +327,14 @@ export function AuthProvider({ children }) {
   // Update a user's department
   const updateUserDepartment = async (userId, newDepartment) => {
     if (!userId) return;
-    if (isFirebaseConfigured && db) {
-      await updateDoc(doc(db, 'users', userId), {
+    setUsersList(prev =>
+      prev.map(u => (u.id === userId || u.uid === userId) ? { ...u, department: newDepartment } : u)
+    );
+    if (isFirebaseConfigured && db && !isDemoMode) {
+      await setDoc(doc(db, 'users', userId), {
         department: newDepartment,
         updated_at: serverTimestamp()
-      });
+      }, { merge: true });
     } else {
       const updated = usersList.map(u =>
         (u.id === userId || u.uid === userId) ? { ...u, department: newDepartment } : u
@@ -358,7 +366,7 @@ export function AuthProvider({ children }) {
       last_login: existing?.last_login || null
     };
 
-    if (isFirebaseConfigured && db) {
+    if (isFirebaseConfigured && db && !isDemoMode) {
       await setDoc(doc(db, 'users', docId), {
         ...payload,
         updated_at: serverTimestamp()
@@ -376,12 +384,37 @@ export function AuthProvider({ children }) {
   };
 
   // Remove a user from directory
-  const deleteDirectoryUser = async (userId) => {
-    if (!userId) return;
-    if (isFirebaseConfigured && db) {
-      await deleteDoc(doc(db, 'users', userId));
+  const deleteDirectoryUser = async (userId, userEmail) => {
+    if (!userId && !userEmail) return;
+    const cleanEmail = userEmail ? userEmail.trim().toLowerCase() : null;
+    const matchingDocs = usersList.filter(
+      u =>
+        u.id === userId ||
+        u.uid === userId ||
+        (cleanEmail && u.email?.toLowerCase() === cleanEmail)
+    );
+
+    // Immediately remove from UI state
+    const nextList = usersList.filter(
+      u =>
+        u.id !== userId &&
+        u.uid !== userId &&
+        (!cleanEmail || u.email?.toLowerCase() !== cleanEmail)
+    );
+    setUsersList(nextList);
+
+    if (isFirebaseConfigured && db && !isDemoMode) {
+      const idsToDelete = new Set();
+      if (userId) idsToDelete.add(userId);
+      matchingDocs.forEach(m => {
+        if (m.id) idsToDelete.add(m.id);
+        if (m.uid) idsToDelete.add(m.uid);
+      });
+      for (const docId of idsToDelete) {
+        await deleteDoc(doc(db, 'users', docId));
+      }
     } else {
-      syncDemoUsers(usersList.filter(u => u.id !== userId && u.uid !== userId));
+      syncDemoUsers(nextList);
     }
   };
 

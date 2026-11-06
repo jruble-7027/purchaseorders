@@ -29,15 +29,18 @@ export function POProvider({ children }) {
   const [expenseAccounts, setExpenseAccounts] = useState(DEFAULT_EXPENSE_ACCOUNTS);
   const [loading, setLoading] = useState(true);
 
-  // Load POs and Expense Accounts
+  // Load POs and Expense Accounts once authenticated
   useEffect(() => {
     if (isFirebaseConfigured && db) {
+      if (!currentUser?.uid) {
+        return;
+      }
       // 1. Subscribe to Purchase Orders
       const q = query(collection(db, 'purchase_orders'), orderBy('created_at', 'desc'));
       const unsubscribePOs = onSnapshot(q, (snapshot) => {
         const pos = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
+          ...doc.data(),
+          id: doc.id
         }));
         setPurchaseOrders(pos);
         setLoading(false);
@@ -50,8 +53,8 @@ export function POProvider({ children }) {
       const unsubscribeAccounts = onSnapshot(collection(db, 'expense_accounts'), (snapshot) => {
         if (!snapshot.empty) {
           const accounts = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
+            ...doc.data(),
+            id: doc.id
           }));
           setExpenseAccounts(accounts);
         }
@@ -85,7 +88,7 @@ export function POProvider({ children }) {
       }
       setLoading(false);
     }
-  }, []);
+  }, [currentUser?.uid]);
 
   // Save to localStorage when state changes in demo mode
   const syncDemoState = (updatedList) => {
