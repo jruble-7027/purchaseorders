@@ -9,7 +9,15 @@ import {
 } from 'lucide-react';
 
 export default function ApprovalModal({ po, isOpen, onClose }) {
-  const { approvePurchaseOrder, rejectPurchaseOrder, markPurchaseOrderPaid, reassignPOYear, previewNextPONumber } = usePOs();
+  const {
+    approvePurchaseOrder,
+    rejectPurchaseOrder,
+    markPurchaseOrderPaid,
+    reassignPOYear,
+    previewNextPONumber,
+    getAccountBudgetStats,
+    fiscalYearInfo
+  } = usePOs();
 
   const currentCalendarYear = new Date().getFullYear();
   const initialYear = parseInt((po?.po_number || '').split('-')[1], 10) || po?.po_year || currentCalendarYear;
@@ -136,6 +144,30 @@ export default function ApprovalModal({ po, isOpen, onClose }) {
               <span>{errorMsg}</span>
             </div>
           )}
+
+          {/* Account Budget Status Summary (June 1 Fiscal Year) */}
+          {(() => {
+            if (!getAccountBudgetStats || !po.department_account_id) return null;
+            const bStats = getAccountBudgetStats(po.department_account_id);
+            if (!bStats || bStats.budget <= 0) return null;
+            const pctAvail = bStats.percentAvailable ?? 0;
+            return (
+              <div className="p-3 bg-emerald-50/50 border border-emerald-200 rounded-lg text-xs space-y-1">
+                <div className="flex items-center justify-between font-bold text-slate-800">
+                  <span>
+                    Account {po.department_account_id.replace(/^ACCT-/i, '')} ({fiscalYearInfo?.label || 'FY'})
+                  </span>
+                  <span className="font-mono text-emerald-800">
+                    ${bStats.available.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Available ({pctAvail.toFixed(1)}%)
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-600 font-mono">
+                  <span>Budget: ${bStats.budget.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span>YTD Spent: ${bStats.ytdSpent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* PO Accounting Year Selector (For post-Dec 31 late submissions or Jan 1 rollover) */}
           <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2">

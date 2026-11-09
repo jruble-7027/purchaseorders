@@ -25,6 +25,7 @@ function SearchableAccountSelect({
   accounts = [],
   value,
   onChange,
+  getAccountBudgetStats,
   placeholder = 'Type account # (e.g. 566)...',
   compact = false
 }) {
@@ -125,6 +126,9 @@ function SearchableAccountSelect({
           ) : (
             filteredAccounts.map((acct) => {
               const isSelected = acct.id === value;
+              const bStats = getAccountBudgetStats ? getAccountBudgetStats(acct.id) : null;
+              const hasBudget = bStats && bStats.budget > 0;
+              const pctAvail = hasBudget ? bStats.percentAvailable : null;
               return (
                 <button
                   key={acct.id}
@@ -134,18 +138,33 @@ function SearchableAccountSelect({
                     setIsOpen(false);
                     setQuery('');
                   }}
-                  className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-amber-50 transition ${
+                  className={`w-full text-left px-3 py-2 flex items-center justify-between gap-2 hover:bg-amber-50 transition ${
                     isSelected ? 'bg-amber-50/80 font-bold text-[#0C2340]' : 'text-slate-700'
                   }`}
                 >
-                  <div>
+                  <div className="min-w-0">
                     <span className="font-mono font-bold text-[#0C2340]">{acct.id}</span>
                     <span className="mx-1.5 text-slate-300">—</span>
                     <span className="font-medium">{acct.name}</span>
                   </div>
-                  {acct.dept && (
-                    <span className="text-[10px] text-slate-400 ml-2 truncate">{acct.dept}</span>
-                  )}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {hasBudget && (
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border ${
+                          pctAvail < 0
+                            ? 'bg-rose-100 text-rose-800 border-rose-300'
+                            : pctAvail <= 20
+                            ? 'bg-amber-100 text-amber-900 border-amber-300'
+                            : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                        }`}
+                      >
+                        ${bStats.available.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({pctAvail.toFixed(1)}% avail)
+                      </span>
+                    )}
+                    {acct.dept && !compact && (
+                      <span className="text-[10px] text-slate-400 truncate max-w-[110px]">{acct.dept}</span>
+                    )}
+                  </div>
                 </button>
               );
             })
@@ -162,6 +181,8 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
     expenseAccounts,
     userExpenseAccounts,
     expenseAccountsMap,
+    fiscalYearInfo,
+    getAccountBudgetStats,
     previewNextPONumber,
     createPurchaseOrder,
     updatePurchaseOrder
@@ -601,26 +622,83 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
             </div>
           </div>
 
-          {/* Section 2: ACCOUNT # (Left Side, Searchable & Required) + Line Items */}
+          {/* Section 2: ACCOUNT # (Left Side, Searchable & Required) + Budget Status + Line Items */}
           <div>
-            {/* Left-aligned Searchable ACCOUNT # Field */}
-            <div className="mb-3 max-w-md">
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-                  ACCOUNT # {poType === 'standard' ? '*' : '(Default for New Rows)'}
-                </label>
-                {availableAccounts.length === 1 && (
-                  <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                    Auto-filled (1 assigned account)
-                  </span>
-                )}
+            {/* Left-aligned Searchable ACCOUNT # Field + Live Fiscal Year Budget Card */}
+            <div className="mb-3 flex flex-col lg:flex-row lg:items-end justify-between gap-3">
+              <div className="w-full max-w-md">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    ACCOUNT # {poType === 'standard' ? '*' : '(Default for New Rows)'}
+                  </label>
+                  {availableAccounts.length === 1 && (
+                    <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      Auto-filled (1 assigned account)
+                    </span>
+                  )}
+                </div>
+                <SearchableAccountSelect
+                  accounts={availableAccounts}
+                  value={departmentAccountId}
+                  onChange={(acctId) => setDepartmentAccountId(acctId)}
+                  getAccountBudgetStats={getAccountBudgetStats}
+                  placeholder="Start typing account # (e.g. 566)..."
+                />
               </div>
-              <SearchableAccountSelect
-                accounts={availableAccounts}
-                value={departmentAccountId}
-                onChange={(acctId) => setDepartmentAccountId(acctId)}
-                placeholder="Start typing account # (e.g. 566)..."
-              />
+
+              {/* Live Account Budget Availability Bar (FY June 1 - May 31) */}
+              {(() => {
+                if (!departmentAccountId || !getAccountBudgetStats) return null;
+                const bStats = getAccountBudgetStats(departmentAccountId);
+                if (!bStats || bStats.budget <= 0) return null;
+                const pctAvail = bStats.percentAvailable ?? 0;
+                const isLow = pctAvail <= 20;
+                const isOver = pctAvail < 0;
+                return (
+                  <div className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                      <span className="font-bold text-slate-700">
+                        {departmentAccountId.replace(/^ACCT-/i, '')} Budget ({fiscalYearInfo?.label || 'FY'} • Resets Jun 1):{' '}
+                        <span className="font-mono text-slate-900">
+                          ${bStats.budget.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-slate-600">
+                          YTD Spent:{' '}
+                          <strong className="font-mono text-slate-900">
+                            ${bStats.ytdSpent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </strong>
+                          {bStats.pendingAmount > 0 && (
+                            <span className="text-amber-700 ml-1">
+                              (+${bStats.pendingAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Pending)
+                            </span>
+                          )}
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 rounded-full font-mono font-bold border ${
+                            isOver
+                              ? 'bg-rose-100 text-rose-800 border-rose-300'
+                              : isLow
+                              ? 'bg-amber-100 text-amber-900 border-amber-300'
+                              : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          }`}
+                        >
+                          Available: ${bStats.available.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({pctAvail.toFixed(1)}%)
+                        </span>
+                      </div>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full transition-all ${
+                          isOver ? 'bg-rose-500' : isLow ? 'bg-amber-500' : 'bg-emerald-500'
+                        }`}
+                        style={{ width: `${Math.max(0, Math.min(100, pctAvail))}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="border border-slate-200 rounded-xl overflow-visible bg-slate-50/70">
@@ -681,6 +759,7 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
                             accounts={availableAccounts}
                             value={item.account_id || departmentAccountId || defaultAccountId}
                             onChange={(acctId) => handleItemChange(idx, 'account_id', acctId)}
+                            getAccountBudgetStats={getAccountBudgetStats}
                             placeholder="Type account # (e.g. 566)..."
                             compact
                           />

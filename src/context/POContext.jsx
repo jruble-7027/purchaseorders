@@ -610,12 +610,164 @@ export function POProvider({ children }) {
     return acc;
   }, {});
 
+  // Fiscal Year Window (June 1 – May 31, automatically resets every June 1)
+  const getFiscalYearInfo = (referenceDate = new Date()) => {
+    const year = referenceDate.getFullYear();
+    const monthZeroIndexed = referenceDate.getMonth(); // 0=Jan ... 5=June ... 11=Dec
+    const startYear = monthZeroIndexed >= 5 ? year : year - 1;
+    const endYear = startYear + 1;
+    return {
+      startYear,
+      endYear,
+      startDate: `${startYear}-06-01`,
+      endDate: `${endYear}-05-31`,
+      label: `FY ${startYear}–${endYear}`,
+      periodLabel: `June 1, ${startYear} – May 31, ${endYear}`
+    };
+  };
+
+  const fiscalYearInfo = getFiscalYearInfo();
+
+  // Compute Year-to-Date (since June 1) Spent, Pending/Encumbered, Available $, and % Available per Account
+  const accountBudgetStatsMap = (() => {
+    const stats = {};
+
+    // Initialize entries for all configured expense accounts
+    expenseAccounts.forEach((acct) => {
+      const id = normalizeAccountId(acct.id);
+      stats[id] = {
+        id,
+        budget: Number(acct.budget) || 0,
+        ytdSpent: 0,      // Approved + Paid POs in current FY (since June 1)
+        pendingAmount: 0, // Pending Approval POs in current FY
+        poCount: 0
+      };
+    });
+
+    // Helper to extract YYYY-MM-DD from purchase_date or created_at
+    const getPODateStr = (po) => {
+      if (po.purchase_date && /^\d{4}-\d{2}-\d{2}/.test(po.purchase_date)) {
+        return po.purchase_date.slice(0, 10);
+      }
+      if (typeof po.created_at === 'string' && /^\d{4}-\d{2}-\d{2}/.test(po.created_at)) {
+        return po.created_at.slice(0, 10);
+      }
+      if (po.created_at && typeof po.created_at.seconds === 'number') {
+        return new Date(po.created_at.seconds * 1000).toISOString().slice(0, 10);
+      }
+      return '';
+    };
+
+    purchaseOrders.forEach((po) => {
+      if (!po || po.status === 'draft' || po.status === 'rejected') return;
+
+      const poDate = getPODateStr(po);
+      // Only include POs within the active Fiscal Year (June 1 – May 31)
+      if (poDate && (poDate < fiscalYearInfo.startDate || poDate > fiscalYearInfo.endDate)) {
+        return;
+      }
+
+      const isSpent = po.status === 'approved' || po.status === 'paid';
+      const isPending = po.status === 'pending_approval';
+      if (!isSpent && !isPending) return;
+
+      const primaryAcctId = normalizeAccountId(po.department_account_id);
+      const poItems = Array.isArray(po.items) ? po.items : [];
+
+      if (poItems.length > 0) {
+        const touchedAccounts = new Set();
+        poItems.forEach((item) => {
+          const itemAcctId = normalizeAccountId(item.account_id || primaryAcctId);
+          if (!itemAcctId) return;
+          const lineTotal =
+            parseFloat(item.total) ||
+            (parseFloat(item.qty || 1) * parseFloat(item.unit_price || item.amount || 0) +
+              parseFloat(item.shipping_handling || 0) +
+              parseFloat(item.tax || 0)) ||
+            0;
+
+          if (!stats[itemAcctId]) {
+            stats[itemAcctId] = {
+              id: itemAcctId,
+              budget: Number(expenseAccountsMap[itemAcctId]?.budget) || 0,
+              ytdSpent: 0,
+              pendingAmount: 0,
+              poCount: 0
+            };
+          }
+
+          if (isSpent) {
+            stats[itemAcctId].ytdSpent += lineTotal;
+          } else if (isPending) {
+            stats[itemAcctId].pendingAmount += lineTotal;
+          }
+          touchedAccounts.add(itemAcctId);
+        });
+        touchedAccounts.forEach((aId) => {
+          if (stats[aId]) stats[aId].poCount += 1;
+        });
+      } else if (primaryAcctId) {
+        const poTotal = parseFloat(po.total_amount) || 0;
+        if (!stats[primaryAcctId]) {
+          stats[primaryAcctId] = {
+            id: primaryAcctId,
+            budget: Number(expenseAccountsMap[primaryAcctId]?.budget) || 0,
+            ytdSpent: 0,
+            pendingAmount: 0,
+            poCount: 0
+          };
+        }
+        if (isSpent) {
+          stats[primaryAcctId].ytdSpent += poTotal;
+        } else if (isPending) {
+          stats[primaryAcctId].pendingAmount += poTotal;
+        }
+        stats[primaryAcctId].poCount += 1;
+      }
+    });
+
+    // Compute available balances and percentages
+    Object.keys(stats).forEach((id) => {
+      const s = stats[id];
+      s.available = s.budget - s.ytdSpent;
+      s.availableAfterPending = s.budget - s.ytdSpent - s.pendingAmount;
+      s.percentAvailable =
+        s.budget > 0 ? ((s.budget - s.ytdSpent) / s.budget) * 100 : null;
+      s.percentSpent =
+        s.budget > 0 ? (s.ytdSpent / s.budget) * 100 : 0;
+    });
+
+    return stats;
+  })();
+
+  const getAccountBudgetStats = (accountId) => {
+    const id = normalizeAccountId(accountId);
+    if (!id) return null;
+    if (accountBudgetStatsMap[id]) return accountBudgetStatsMap[id];
+    const acct = expenseAccountsMap[id];
+    const budget = Number(acct?.budget) || 0;
+    return {
+      id,
+      budget,
+      ytdSpent: 0,
+      pendingAmount: 0,
+      available: budget,
+      availableAfterPending: budget,
+      percentAvailable: budget > 0 ? 100 : null,
+      percentSpent: 0,
+      poCount: 0
+    };
+  };
+
   const value = {
     purchaseOrders,
     expenseAccounts,
     userExpenseAccounts,
     getVisibleAccountsForUser,
     expenseAccountsMap,
+    fiscalYearInfo,
+    accountBudgetStatsMap,
+    getAccountBudgetStats,
     loading,
     previewNextPONumber,
     createPurchaseOrder,
