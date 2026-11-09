@@ -42,7 +42,7 @@ if (isFirebaseConfigured) {
 }
 
 // Domain verification helper
-export const ALLOWED_DOMAINS = (import.meta.env.VITE_ALLOWED_DOMAINS || 'wcatrojans.org,wesleyan.edu')
+export const ALLOWED_DOMAINS = (import.meta.env.VITE_ALLOWED_DOMAINS || 'wcatrojans.org,wesed.org')
   .split(',')
   .map(d => d.trim().toLowerCase());
 

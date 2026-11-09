@@ -36,7 +36,7 @@ A web application designed for Wesleyan Christian Academy (`@wcatrojans.org`) to
   - **Printable Requisition Form**: Formatted, print-ready document with official header, itemized grid, approval stamps, and compliance history.
 
 ### 3. Backend & Security
-- **Domain Restricted Auth**: Preconfigured for `@wcatrojans.org` (and `@wesleyan.edu`).
+- **Domain Restricted Auth**: Preconfigured for `@wcatrojans.org` (and `@wesed.org`).
 - **Cloud Firestore**:
   - Production-ready `firestore.rules` enforcing role-based permissions (employees read/create their own, accountants review all).
 - **Firebase Storage**:
@@ -89,7 +89,7 @@ VITE_FIREBASE_PROJECT_ID=wca-purchase-orders
 VITE_FIREBASE_STORAGE_BUCKET=wca-purchase-orders.appspot.com
 VITE_FIREBASE_MESSAGING_SENDER_ID=123456789012
 VITE_FIREBASE_APP_ID=1:123456789012:web:abcdef123456
-VITE_ALLOWED_DOMAINS=wcatrojans.org,wesleyan.edu
+VITE_ALLOWED_DOMAINS=wcatrojans.org,wesed.org
 ```
 
 ### Step 3: Deploy Security Rules & Hosting

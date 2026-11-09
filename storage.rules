@@ -5,7 +5,7 @@ service firebase.storage {
     function isWcaMember() {
       return request.auth != null &&
              request.auth.token.email != null &&
-             request.auth.token.email.lower().matches('.*@(wcatrojans[.]org|wesleyan[.]edu)$');
+             request.auth.token.email.lower().matches('.*@(wcatrojans[.]org|wesed[.]org)$');
     }
     
     function isAllowedFileType() {

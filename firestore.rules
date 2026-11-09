@@ -11,7 +11,7 @@ service cloud.firestore {
     // Fields:
     //   - uid: string
     //   - displayName: string
-    //   - email: string (@wcatrojans.org or @wesleyan.edu)
+    //   - email: string (@wcatrojans.org or @wesed.org)
     //   - role: string ('employee' | 'accountant' | 'admin')
     //   - department: string
     //   - photoURL: string (optional)
@@ -57,11 +57,11 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Check institutional domain (@wcatrojans.org or @wesleyan.edu)
+    // Check institutional domain (@wcatrojans.org or @wesed.org)
     function isWcaMember() {
       return isAuthenticated() &&
         request.auth.token.email != null &&
-        request.auth.token.email.lower().matches('.*@(wcatrojans\\.org|wesleyan\\.edu)$');
+        request.auth.token.email.lower().matches('.*@(wcatrojans\\.org|wesed\\.org)$');
     }
 
     // Safely check if user is an accountant or admin without crashing on missing user documents
