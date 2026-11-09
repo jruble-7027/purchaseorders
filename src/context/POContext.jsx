@@ -594,8 +594,10 @@ export function POProvider({ children }) {
 
   const userExpenseAccounts = getVisibleAccountsForUser(currentUser);
 
-  // Delete draft PO
+  // Delete a PO (Staff can delete unapproved POs; Business Office/Admins can delete any PO)
   const deletePurchaseOrder = async (poId) => {
+    if (!poId) return;
+    setPurchaseOrders(prev => prev.filter(p => p.id !== poId));
     if (isFirebaseConfigured && db) {
       await deleteDoc(doc(db, 'purchase_orders', poId));
     } else {

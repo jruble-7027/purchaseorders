@@ -134,11 +134,12 @@ service cloud.firestore {
          request.resource.data.get('status', 'pending_approval') in ['draft', 'pending_approval'])
       );
 
-      // Only draft owners or accountants/admins can delete
+      // Accountants/Admins can delete any PO; owners can delete their own PO before it is approved or paid
       allow delete: if isWcaMember() && (
         isAccountant() ||
-        (resource.data.created_by == request.auth.uid &&
-         resource.data.get('status', '') == 'draft')
+        ((resource.data.created_by == request.auth.uid ||
+          resource.data.get('employee_email', '').lower() == request.auth.token.email.lower()) &&
+         resource.data.get('status', '') in ['draft', 'pending_approval', 'rejected'])
       );
 
       // Audit logs sub-collection for every PO

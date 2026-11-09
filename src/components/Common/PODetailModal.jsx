@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { usePOs } from '../../context/POContext';
 import StatusBadge from '../StatusBadge';
@@ -13,12 +13,14 @@ import {
   History,
   FileCheck2,
   DollarSign,
-  AlertCircle
+  AlertCircle,
+  Trash2
 } from 'lucide-react';
 
 export default function PODetailModal({ po, onClose, onOpenActionModal, onEditDraft }) {
   const { currentUser } = useAuth();
-  const { expenseAccountsMap } = usePOs();
+  const { expenseAccountsMap, deletePurchaseOrder } = usePOs();
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   if (!po) return null;
 
@@ -324,8 +326,42 @@ export default function PODetailModal({ po, onClose, onOpenActionModal, onEditDr
           </div>
 
           <div className="flex items-center space-x-2">
-            {/* Edit option for owner on drafts or rejected POs */}
-            {isOwner && (po.status === 'draft' || po.status === 'rejected') && (
+            {/* Delete option for unapproved owner POs or Business Office/Admins */}
+            {(isAccountant || (isOwner && po.status !== 'approved' && po.status !== 'paid')) && (
+              confirmDelete ? (
+                <div className="inline-flex items-center gap-1.5 mr-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await deletePurchaseOrder(po.id);
+                      onClose();
+                    }}
+                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs rounded-lg transition"
+                  >
+                    Confirm Delete PO
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelete(false)}
+                    className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium text-xs rounded-lg transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(true)}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 border border-rose-200 text-rose-600 hover:bg-rose-50 font-semibold text-xs rounded-lg transition"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete PO</span>
+                </button>
+              )
+            )}
+
+            {/* Edit option for owner on unapproved POs (or Business Office/Admins) */}
+            {(isAccountant || (isOwner && po.status !== 'approved' && po.status !== 'paid')) && (
               <button
                 type="button"
                 onClick={() => {
@@ -334,7 +370,7 @@ export default function PODetailModal({ po, onClose, onOpenActionModal, onEditDr
                 }}
                 className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold text-xs rounded-lg transition"
               >
-                Edit & Resubmit
+                Edit PO
               </button>
             )}
 

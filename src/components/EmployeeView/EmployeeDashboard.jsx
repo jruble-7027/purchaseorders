@@ -22,6 +22,8 @@ export default function EmployeeDashboard({ onOpenNewPO, onSelectPO, onEditPO })
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [confirmDeletePOId, setConfirmDeletePOId] = useState(null);
+  const isAccountantOrAdmin = currentUser?.role === 'admin' || currentUser?.role === 'accountant';
 
   // Filter to show user's purchase orders (or all if demo testing)
   const myPOs = purchaseOrders.filter(po => {
@@ -59,11 +61,10 @@ export default function EmployeeDashboard({ onOpenNewPO, onSelectPO, onEditPO })
     return matchesStatus && matchesSearch;
   });
 
-  const handleDeleteDraft = async (e, poId) => {
+  const handleDeletePO = async (e, poId) => {
     e.stopPropagation();
-    if (window.confirm('Are you sure you want to delete this draft purchase order?')) {
-      await deletePurchaseOrder(poId);
-    }
+    setConfirmDeletePOId(null);
+    await deletePurchaseOrder(poId);
   };
 
   return (
@@ -239,38 +240,57 @@ export default function EmployeeDashboard({ onOpenNewPO, onSelectPO, onEditPO })
 
                       {/* Actions */}
                       <td className="px-4 py-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end space-x-1.5">
-                          <button
-                            type="button"
-                            onClick={() => onSelectPO(po)}
-                            className="p-1.5 text-slate-500 hover:text-[#0C2340] rounded hover:bg-slate-100 transition"
-                            title="View Full Details"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-
-                          {(po.status === 'draft' || po.status === 'rejected') && (
+                        {confirmDeletePOId === po.id ? (
+                          <div className="inline-flex items-center gap-1.5">
                             <button
                               type="button"
-                              onClick={() => onEditPO(po)}
-                              className="p-1.5 text-amber-600 hover:text-amber-800 rounded hover:bg-amber-50 transition"
-                              title="Edit / Resubmit"
+                              onClick={(e) => handleDeletePO(e, po.id)}
+                              className="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-700 text-white font-semibold text-[11px] shadow-sm transition"
                             >
-                              <FileEdit className="w-4 h-4" />
+                              Delete
                             </button>
-                          )}
-
-                          {po.status === 'draft' && (
                             <button
                               type="button"
-                              onClick={(e) => handleDeleteDraft(e, po.id)}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 transition"
-                              title="Delete Draft"
+                              onClick={() => setConfirmDeletePOId(null)}
+                              className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium text-[11px] transition"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              Cancel
                             </button>
-                          )}
-                        </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-end space-x-1.5">
+                            <button
+                              type="button"
+                              onClick={() => onSelectPO(po)}
+                              className="p-1.5 text-slate-500 hover:text-[#0C2340] rounded hover:bg-slate-100 transition"
+                              title="View Full Details"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+
+                            {(po.status !== 'approved' && po.status !== 'paid') || isAccountantOrAdmin ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => onEditPO(po)}
+                                  className="p-1.5 text-amber-600 hover:text-amber-800 rounded hover:bg-amber-50 transition"
+                                  title="Edit Purchase Order"
+                                >
+                                  <FileEdit className="w-4 h-4" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeletePOId(po.id)}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 transition"
+                                  title="Delete Purchase Order"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </>
+                            ) : null}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );

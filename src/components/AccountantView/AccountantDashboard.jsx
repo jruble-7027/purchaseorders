@@ -18,12 +18,14 @@ import {
   Building2,
   AlertCircle,
   Database,
-  Users
+  Users,
+  Trash2
 } from 'lucide-react';
 
 export default function AccountantDashboard({ onSelectPO, onOpenActionModal, onOpenUserManagement }) {
-  const { purchaseOrders, expenseAccounts, expenseAccountsMap } = usePOs();
+  const { purchaseOrders, expenseAccounts, expenseAccountsMap, deletePurchaseOrder } = usePOs();
   const [isAccountCodesModalOpen, setIsAccountCodesModalOpen] = useState(false);
+  const [confirmDeletePOId, setConfirmDeletePOId] = useState(null);
 
   // Filters state
   const [searchQuery, setSearchQuery] = useState('');
@@ -486,34 +488,65 @@ export default function AccountantDashboard({ onSelectPO, onOpenActionModal, onO
                       </td>
 
                       <td className="px-4 py-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end space-x-1">
-                          <button
-                            type="button"
-                            onClick={() => printPurchaseOrder(po, expenseAccountsMap)}
-                            className="p-1.5 text-slate-500 hover:text-[#0C2340] rounded hover:bg-slate-100 transition"
-                            title="Print Formal Form"
-                          >
-                            <Printer className="w-4 h-4" />
-                          </button>
+                        {confirmDeletePOId === po.id ? (
+                          <div className="inline-flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setConfirmDeletePOId(null);
+                                await deletePurchaseOrder(po.id);
+                              }}
+                              className="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-700 text-white font-semibold text-[11px] shadow-sm transition"
+                            >
+                              Delete
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeletePOId(null)}
+                              className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium text-[11px] transition"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-end space-x-1">
+                            <button
+                              type="button"
+                              onClick={() => printPurchaseOrder(po, expenseAccountsMap)}
+                              className="p-1.5 text-slate-500 hover:text-[#0C2340] rounded hover:bg-slate-100 transition"
+                              title="Print Formal Form"
+                            >
+                              <Printer className="w-4 h-4" />
+                            </button>
 
-                          <button
-                            type="button"
-                            onClick={() => onSelectPO(po)}
-                            className="p-1.5 text-slate-500 hover:text-[#0C2340] rounded hover:bg-slate-100 transition"
-                            title="View Audit Details"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
+                            <button
+                              type="button"
+                              onClick={() => onSelectPO(po)}
+                              className="p-1.5 text-slate-500 hover:text-[#0C2340] rounded hover:bg-slate-100 transition"
+                              title="View Audit Details"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
 
-                          <button
-                            type="button"
-                            onClick={() => onOpenActionModal(po)}
-                            className="p-1.5 text-emerald-700 hover:text-emerald-900 rounded hover:bg-emerald-50 transition"
-                            title="Change Status / Review"
-                          >
-                            <CheckCheck className="w-4 h-4" />
-                          </button>
-                        </div>
+                            <button
+                              type="button"
+                              onClick={() => onOpenActionModal(po)}
+                              className="p-1.5 text-emerald-700 hover:text-emerald-900 rounded hover:bg-emerald-50 transition"
+                              title="Change Status / Review"
+                            >
+                              <CheckCheck className="w-4 h-4" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeletePOId(po.id)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 transition"
+                              title="Delete Purchase Order"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
