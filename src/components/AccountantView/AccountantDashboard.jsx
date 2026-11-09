@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { usePOs } from '../../context/POContext';
 import StatusBadge from '../StatusBadge';
+import AccountCodesModal from './AccountCodesModal';
 import { exportPOsToCSV, printPurchaseOrder } from '../../services/exportService';
 import {
   Download,
@@ -21,7 +22,8 @@ import {
 } from 'lucide-react';
 
 export default function AccountantDashboard({ onSelectPO, onOpenActionModal, onOpenUserManagement }) {
-  const { purchaseOrders, expenseAccounts, expenseAccountsMap, seedDefaultAccounts } = usePOs();
+  const { purchaseOrders, expenseAccounts, expenseAccountsMap } = usePOs();
+  const [isAccountCodesModalOpen, setIsAccountCodesModalOpen] = useState(false);
 
   // Filters state
   const [searchQuery, setSearchQuery] = useState('');
@@ -129,12 +131,13 @@ export default function AccountantDashboard({ onSelectPO, onOpenActionModal, onO
           )}
 
           <button
-            onClick={seedDefaultAccounts}
-            title="Seed standard WCA departmental expense accounts into Cloud Firestore"
-            className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-slate-700/80 hover:bg-slate-700 text-slate-200 hover:text-white font-medium text-xs transition border border-slate-600"
+            type="button"
+            onClick={() => setIsAccountCodesModalOpen(true)}
+            title="Manage WCA General Ledger expense accounts, CSV import/export, and staff account access"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-700/80 hover:bg-slate-700 text-slate-100 hover:text-white font-semibold text-xs transition border border-slate-600 shadow-sm"
           >
             <Database className="w-3.5 h-3.5 text-amber-400" />
-            <span>Seed Dept Codes</span>
+            <span>Manage Account Codes</span>
           </button>
 
           <button
@@ -521,6 +524,10 @@ export default function AccountantDashboard({ onSelectPO, onOpenActionModal, onO
         )}
       </div>
 
+      <AccountCodesModal
+        isOpen={isAccountCodesModalOpen}
+        onClose={() => setIsAccountCodesModalOpen(false)}
+      />
     </div>
   );
 }

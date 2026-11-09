@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { usePOs } from '../../context/POContext';
 import {
   Users,
   ShieldAlert,
@@ -12,7 +13,8 @@ import {
   CheckCircle2,
   Building2,
   Mail,
-  Clock
+  Clock,
+  Hash
 } from 'lucide-react';
 
 const ROLE_META = {
@@ -51,10 +53,16 @@ export default function UserManagement() {
     usersList,
     updateUserRole,
     updateUserDepartment,
+    updateUserAllowedAccounts,
     addOrPreauthorizeUser,
     deleteDirectoryUser,
     seedDefaultUsers
   } = useAuth();
+  const {
+    expenseAccounts,
+    getVisibleAccountsForUser,
+    saveExpenseAccount
+  } = usePOs();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
@@ -64,13 +72,24 @@ export default function UserManagement() {
   const [editingDeptValue, setEditingDeptValue] = useState('');
   const [confirmDeleteKey, setConfirmDeleteKey] = useState(null);
 
+  // Assign Accounts Modal state
+  const [assigningUser, setAssigningUser] = useState(null);
+  const [assignedAcctIds, setAssignedAcctIds] = useState([]);
+  const [matchDeptToggle, setMatchDeptToggle] = useState(false);
+  const [acctSearchFilter, setAcctSearchFilter] = useState('');
+  const [savingAccounts, setSavingAccounts] = useState(false);
+
   // New user form state
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserDept, setNewUserDept] = useState('High School Science');
   const [newUserRole, setNewUserRole] = useState('employee');
+  const [newUserAccts, setNewUserAccts] = useState([]);
+  const [newUserMatchDept, setNewUserMatchDept] = useState(false);
   const [formError, setFormError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const formatShortCode = (id = '') => id.replace(/^ACCT-/i, '');
 
   const showToast = (msg) => {
     setStatusMessage(msg);
@@ -130,6 +149,76 @@ export default function UserManagement() {
     }
   };
 
+  const openAssignAccountsModal = (user) => {
+    const emailLower = (user.email || '').trim().toLowerCase();
+    const initialSet = new Set(Array.isArray(user.allowed_accounts) ? user.allowed_accounts : []);
+    // Also include accounts where acct.allowed_emails includes this user
+    expenseAccounts.forEach((acct) => {
+      if (
+        emailLower &&
+        Array.isArray(acct.allowed_emails) &&
+        acct.allowed_emails.some((e) => String(e).trim().toLowerCase() === emailLower)
+      ) {
+        initialSet.add(acct.id);
+      }
+    });
+    setAssigningUser(user);
+    setAssignedAcctIds(Array.from(initialSet));
+    setMatchDeptToggle(Boolean(user.match_department_accounts));
+    setAcctSearchFilter('');
+  };
+
+  const toggleAccountForUser = (acctId) => {
+    setAssignedAcctIds((prev) =>
+      prev.includes(acctId) ? prev.filter((id) => id !== acctId) : [...prev, acctId]
+    );
+  };
+
+  const handleSaveAssignedAccounts = async (e) => {
+    e.preventDefault();
+    if (!assigningUser) return;
+    const targetId = assigningUser.id || assigningUser.uid;
+    const emailLower = (assigningUser.email || '').trim().toLowerCase();
+
+    try {
+      setSavingAccounts(true);
+      await updateUserAllowedAccounts(targetId, assignedAcctIds, matchDeptToggle);
+
+      // Also keep expense_accounts.allowed_emails in sync in Cloud Firestore
+      if (emailLower) {
+        for (const acct of expenseAccounts) {
+          const currentEmails = Array.isArray(acct.allowed_emails)
+            ? acct.allowed_emails.map((em) => String(em).trim().toLowerCase())
+            : [];
+          const hasEmail = currentEmails.includes(emailLower);
+          const shouldHave = assignedAcctIds.includes(acct.id);
+
+          if (shouldHave && !hasEmail) {
+            await saveExpenseAccount({
+              ...acct,
+              allowed_emails: [...currentEmails, emailLower]
+            });
+          } else if (!shouldHave && hasEmail) {
+            await saveExpenseAccount({
+              ...acct,
+              allowed_emails: currentEmails.filter((em) => em !== emailLower)
+            });
+          }
+        }
+      }
+
+      showToast(
+        `Saved assigned account numbers for ${assigningUser.displayName || assigningUser.email}.`
+      );
+      setAssigningUser(null);
+    } catch (err) {
+      console.error('Failed to save assigned accounts:', err);
+      showToast(`Error saving assigned accounts: ${err.message}`);
+    } finally {
+      setSavingAccounts(false);
+    }
+  };
+
   const handleAddUser = async (e) => {
     e.preventDefault();
     setFormError(null);
@@ -145,12 +234,31 @@ export default function UserManagement() {
         displayName: newUserName.trim() || cleanEmail.split('@')[0],
         email: cleanEmail,
         role: newUserRole,
-        department: newUserDept.trim() || 'Faculty / Staff'
+        department: newUserDept.trim() || 'Faculty / Staff',
+        allowed_accounts: newUserAccts,
+        match_department_accounts: newUserMatchDept
       });
+
+      // Also sync onto selected expense_accounts in Firestore
+      for (const acctId of newUserAccts) {
+        const acct = expenseAccounts.find((a) => a.id === acctId);
+        if (acct) {
+          const currentEmails = Array.isArray(acct.allowed_emails) ? acct.allowed_emails : [];
+          if (!currentEmails.map((em) => em.toLowerCase()).includes(cleanEmail)) {
+            await saveExpenseAccount({
+              ...acct,
+              allowed_emails: [...currentEmails, cleanEmail]
+            });
+          }
+        }
+      }
+
       setIsAddModalOpen(false);
       setNewUserName('');
       setNewUserEmail('');
       setNewUserRole('employee');
+      setNewUserAccts([]);
+      setNewUserMatchDept(false);
       showToast(`Authorized ${cleanEmail} as ${ROLE_META[newUserRole]?.label}.`);
     } catch (err) {
       setFormError(err.message || 'Could not save user.');
@@ -367,6 +475,7 @@ export default function UserManagement() {
               <tr className="bg-slate-50/80 text-[11px] font-semibold uppercase tracking-wider text-slate-500 border-b border-slate-200">
                 <th className="py-3 px-4">Staff Member</th>
                 <th className="py-3 px-4">Department</th>
+                <th className="py-3 px-4">Assigned Account #s</th>
                 <th className="py-3 px-4">Current Access Level</th>
                 <th className="py-3 px-4">Change Role</th>
                 <th className="py-3 px-4">SSO Status</th>
@@ -376,7 +485,7 @@ export default function UserManagement() {
             <tbody className="divide-y divide-slate-100 text-xs">
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-10 text-center text-slate-400">
+                  <td colSpan={7} className="py-10 text-center text-slate-400">
                     No users match your current search filter.
                   </td>
                 </tr>
@@ -389,6 +498,7 @@ export default function UserManagement() {
                     currentUser &&
                     (user.email?.toLowerCase() === currentUser.email?.toLowerCase() ||
                       targetId === currentUser.uid);
+                  const visibleAccts = getVisibleAccountsForUser(user);
 
                   return (
                     <tr key={targetId} className="hover:bg-slate-50/80 transition">
@@ -455,6 +565,44 @@ export default function UserManagement() {
                               {user.department || 'Faculty / Staff'}
                             </span>
                           </button>
+                        )}
+                      </td>
+
+                      {/* Assigned Account #s */}
+                      <td className="py-3.5 px-4">
+                        {userRole === 'admin' || userRole === 'accountant' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                            <Hash className="w-3 h-3" />
+                            <span>All Accounts ({expenseAccounts.length})</span>
+                          </span>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {visibleAccts.length === 0 ? (
+                              <div className="text-[11px] text-rose-600 font-medium">
+                                No accounts assigned
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1 flex-wrap max-w-[230px]">
+                                {visibleAccts.map((acct) => (
+                                  <span
+                                    key={acct.id}
+                                    title={`${acct.name} (${acct.dept})`}
+                                    className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-blue-50 text-blue-900 border border-blue-200"
+                                  >
+                                    {formatShortCode(acct.id)}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => openAssignAccountsModal(user)}
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#0C2340] hover:text-amber-600 underline decoration-dotted underline-offset-2"
+                            >
+                              <Hash className="w-3 h-3" />
+                              <span>Assign Accounts</span>
+                            </button>
+                          </div>
                         )}
                       </td>
 
@@ -632,6 +780,53 @@ export default function UserManagement() {
                 </select>
               </div>
 
+              {newUserRole === 'employee' && (
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+                  <div className="font-semibold text-slate-800 flex items-center justify-between">
+                    <span>Assigned GL Account #s ({newUserAccts.length} selected)</span>
+                  </div>
+                  <div className="max-h-32 overflow-y-auto space-y-1 pr-1">
+                    {expenseAccounts.map((acct) => {
+                      const checked = newUserAccts.includes(acct.id);
+                      return (
+                        <label
+                          key={acct.id}
+                          className="flex items-center gap-2 p-1.5 rounded hover:bg-white cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() =>
+                              setNewUserAccts((prev) =>
+                                prev.includes(acct.id)
+                                  ? prev.filter((id) => id !== acct.id)
+                                  : [...prev, acct.id]
+                              )
+                            }
+                            className="rounded border-slate-300 text-[#0C2340]"
+                          />
+                          <span className="font-mono font-bold text-[#0C2340]">
+                            {formatShortCode(acct.id)}
+                          </span>
+                          <span className="text-slate-600 truncate">
+                            — {acct.name}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <label className="flex items-center gap-2 pt-1.5 border-t border-slate-200 text-[11px] text-slate-600 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={newUserMatchDept}
+                      onChange={(e) => setNewUserMatchDept(e.target.checked)}
+                      className="rounded border-slate-300 text-[#0C2340]"
+                    />
+                    <span>Also allow all accounts matching their Department</span>
+                  </label>
+                </div>
+              )}
+
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
@@ -647,6 +842,127 @@ export default function UserManagement() {
                 >
                   {submitting ? 'Saving...' : 'Authorize User'}
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Assign Account Numbers Modal */}
+      {assigningUser && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 text-slate-900 border border-slate-200">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="text-base font-bold text-[#0C2340]">
+                  Assign Account #s — {assigningUser.displayName || assigningUser.email}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Select which Expense Account numbers this staff member can see on PO forms. If only 1 account is assigned, it will auto-fill for them automatically.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAssigningUser(null)}
+                className="text-slate-400 hover:text-slate-600 text-lg leading-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveAssignedAccounts} className="space-y-4 text-xs">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={acctSearchFilter}
+                  onChange={(e) => setAcctSearchFilter(e.target.value)}
+                  placeholder="Filter accounts by # (e.g. 566), name, or department..."
+                  className="w-full pl-8 pr-3 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#0C2340]"
+                />
+              </div>
+
+              <div className="max-h-60 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100">
+                {expenseAccounts
+                  .filter((acct) => {
+                    if (!acctSearchFilter) return true;
+                    const q = acctSearchFilter.toLowerCase();
+                    return (
+                      formatShortCode(acct.id).toLowerCase().includes(q) ||
+                      (acct.name || '').toLowerCase().includes(q) ||
+                      (acct.dept || '').toLowerCase().includes(q)
+                    );
+                  })
+                  .map((acct) => {
+                    const checked = assignedAcctIds.includes(acct.id);
+                    return (
+                      <label
+                        key={acct.id}
+                        className={`flex items-center justify-between p-2.5 cursor-pointer transition ${
+                          checked ? 'bg-blue-50/70' : 'hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleAccountForUser(acct.id)}
+                            className="rounded border-slate-300 text-[#0C2340]"
+                          />
+                          <div>
+                            <div className="font-semibold text-slate-900 flex items-center gap-1.5">
+                              <span className="font-mono font-bold text-[#0C2340] px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200">
+                                {formatShortCode(acct.id)}
+                              </span>
+                              <span>{acct.name}</span>
+                            </div>
+                            <div className="text-[11px] text-slate-500 mt-0.5">
+                              Department: {acct.dept || 'General'}
+                            </div>
+                          </div>
+                        </div>
+                      </label>
+                    );
+                  })}
+              </div>
+
+              <label className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={matchDeptToggle}
+                  onChange={(e) => setMatchDeptToggle(e.target.checked)}
+                  className="rounded border-slate-300 text-[#0C2340]"
+                />
+                <div>
+                  <div className="font-semibold text-slate-800">
+                    Also include all accounts matching user&apos;s Department ({assigningUser.department || 'Faculty / Staff'})
+                  </div>
+                  <div className="text-[11px] text-slate-500">
+                    Automatically grants access to any account whose Department matches {assigningUser.department || 'their department'}.
+                  </div>
+                </div>
+              </label>
+
+              <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                <span className="text-slate-500 font-medium">
+                  {assignedAcctIds.length} direct account(s) selected
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAssigningUser(null)}
+                    className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingAccounts}
+                    className="px-4 py-2 rounded-lg bg-[#0C2340] hover:bg-slate-800 text-white font-semibold shadow-sm transition"
+                  >
+                    {savingAccounts ? 'Saving...' : 'Save Assigned Accounts'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

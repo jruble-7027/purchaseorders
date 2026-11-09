@@ -120,17 +120,30 @@ export function AuthProvider({ children }) {
                 getDoc(preAuthLegacyRef)
               ]);
 
+              let allowedAccounts = [];
+              let matchDeptAccounts = false;
+
               const activePreSnap = preExactSnap.exists() ? preExactSnap : (preLegacySnap.exists() ? preLegacySnap : null);
               if (activePreSnap) {
                 const preData = activePreSnap.data();
                 if (preData.role) role = preData.role;
                 if (preData.department) department = preData.department;
+                if (Array.isArray(preData.allowed_accounts)) allowedAccounts = preData.allowed_accounts;
+                if (typeof preData.match_department_accounts === 'boolean') {
+                  matchDeptAccounts = preData.match_department_accounts;
+                }
               }
 
               if (userSnap.exists()) {
                 const existingData = userSnap.data();
                 if (existingData.department) {
                   department = existingData.department;
+                }
+                if (Array.isArray(existingData.allowed_accounts)) {
+                  allowedAccounts = existingData.allowed_accounts;
+                }
+                if (typeof existingData.match_department_accounts === 'boolean') {
+                  matchDeptAccounts = existingData.match_department_accounts;
                 }
                 // Respect Firestore role unless .env explicitly grants higher role
                 if (ADMIN_EMAILS.includes(emailLower)) {
@@ -148,6 +161,8 @@ export function AuthProvider({ children }) {
                   photoURL: user.photoURL || existingData.photoURL || '',
                   role: role,
                   department: department,
+                  allowed_accounts: allowedAccounts,
+                  match_department_accounts: matchDeptAccounts,
                   last_login: serverTimestamp()
                 }, { merge: true });
               } else {
@@ -159,6 +174,8 @@ export function AuthProvider({ children }) {
                   photoURL: user.photoURL || '',
                   role: role,
                   department: department,
+                  allowed_accounts: allowedAccounts,
+                  match_department_accounts: matchDeptAccounts,
                   created_at: serverTimestamp(),
                   last_login: serverTimestamp()
                 }, { merge: true });
@@ -171,19 +188,42 @@ export function AuthProvider({ children }) {
               if (preLegacySnap.exists()) {
                 await deleteDoc(preAuthLegacyRef).catch(() => {});
               }
+
+              setCurrentUser({
+                uid: user.uid,
+                displayName: user.displayName || user.email.split('@')[0],
+                email: user.email,
+                photoURL: user.photoURL,
+                role: role,
+                department: department,
+                allowed_accounts: allowedAccounts,
+                match_department_accounts: matchDeptAccounts
+              });
             } catch (err) {
               console.warn('Could not read/write user profile in Firestore:', err);
+              setCurrentUser({
+                uid: user.uid,
+                displayName: user.displayName || user.email.split('@')[0],
+                email: user.email,
+                photoURL: user.photoURL,
+                role: role,
+                department: department,
+                allowed_accounts: [],
+                match_department_accounts: false
+              });
             }
+          } else {
+            setCurrentUser({
+              uid: user.uid,
+              displayName: user.displayName || user.email.split('@')[0],
+              email: user.email,
+              photoURL: user.photoURL,
+              role: role,
+              department: department,
+              allowed_accounts: [],
+              match_department_accounts: false
+            });
           }
-
-          setCurrentUser({
-            uid: user.uid,
-            displayName: user.displayName || user.email.split('@')[0],
-            email: user.email,
-            photoURL: user.photoURL,
-            role: role,
-            department: department
-          });
           setAuthError(null);
         } else {
           setCurrentUser(null);
@@ -200,7 +240,7 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  // Keep currentUser's role & department live-synced if an Admin updates it in Firestore
+  // Keep currentUser's role, department & assigned accounts live-synced if an Admin/Approver updates them in Firestore
   useEffect(() => {
     if (!currentUser || isDemoMode || !usersList.length) return;
     const match = usersList.find(
@@ -209,13 +249,27 @@ export function AuthProvider({ children }) {
         u.uid === currentUser.uid ||
         (u.email && currentUser.email && u.email.toLowerCase() === currentUser.email.toLowerCase())
     );
-    if (match && match.role && (match.role !== currentUser.role || match.department !== currentUser.department)) {
+    if (!match) return;
+    const nextAccounts = Array.isArray(match.allowed_accounts) ? match.allowed_accounts : [];
+    const prevAccounts = Array.isArray(currentUser.allowed_accounts) ? currentUser.allowed_accounts : [];
+    const accountsChanged = JSON.stringify(nextAccounts) !== JSON.stringify(prevAccounts);
+    const nextMatchDept = Boolean(match.match_department_accounts);
+    const prevMatchDept = Boolean(currentUser.match_department_accounts);
+
+    if (
+      (match.role && match.role !== currentUser.role) ||
+      (match.department && match.department !== currentUser.department) ||
+      accountsChanged ||
+      nextMatchDept !== prevMatchDept
+    ) {
       setCurrentUser((prev) =>
         prev
           ? {
               ...prev,
-              role: match.role,
-              department: match.department || prev.department
+              role: match.role || prev.role,
+              department: match.department || prev.department,
+              allowed_accounts: nextAccounts,
+              match_department_accounts: nextMatchDept
             }
           : prev
       );
@@ -347,8 +401,53 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // Update a user's assigned GL accounts & department-matching flag
+  const updateUserAllowedAccounts = async (userId, allowedAccounts = [], matchDepartmentAccounts = false) => {
+    if (!userId) return;
+    const cleanAccounts = Array.from(new Set((allowedAccounts || []).filter(Boolean)));
+    const matchDept = Boolean(matchDepartmentAccounts);
+
+    setUsersList(prev =>
+      prev.map(u =>
+        (u.id === userId || u.uid === userId)
+          ? { ...u, allowed_accounts: cleanAccounts, match_department_accounts: matchDept }
+          : u
+      )
+    );
+
+    if (isFirebaseConfigured && db && !isDemoMode) {
+      await setDoc(doc(db, 'users', userId), {
+        allowed_accounts: cleanAccounts,
+        match_department_accounts: matchDept,
+        updated_at: serverTimestamp()
+      }, { merge: true });
+    } else {
+      const updated = usersList.map(u =>
+        (u.id === userId || u.uid === userId)
+          ? { ...u, allowed_accounts: cleanAccounts, match_department_accounts: matchDept }
+          : u
+      );
+      syncDemoUsers(updated);
+    }
+
+    if (currentUser && (currentUser.uid === userId || currentUser.id === userId)) {
+      setCurrentUser(prev =>
+        prev
+          ? { ...prev, allowed_accounts: cleanAccounts, match_department_accounts: matchDept }
+          : prev
+      );
+    }
+  };
+
   // Pre-authorize or add a user by email
-  const addOrPreauthorizeUser = async ({ displayName, email, role = 'employee', department = 'Faculty / Staff' }) => {
+  const addOrPreauthorizeUser = async ({
+    displayName,
+    email,
+    role = 'employee',
+    department = 'Faculty / Staff',
+    allowed_accounts = [],
+    match_department_accounts = false
+  }) => {
     const cleanEmail = (email || '').trim().toLowerCase();
     if (!cleanEmail || !cleanEmail.includes('@')) {
       throw new Error('Please enter a valid @wcatrojans.org email address.');
@@ -362,6 +461,10 @@ export function AuthProvider({ children }) {
       email: cleanEmail,
       role,
       department: (department || 'Faculty / Staff').trim(),
+      allowed_accounts: Array.isArray(allowed_accounts)
+        ? allowed_accounts
+        : (existing?.allowed_accounts || []),
+      match_department_accounts: Boolean(match_department_accounts),
       photoURL: existing?.photoURL || '',
       last_login: existing?.last_login || null
     };
@@ -450,6 +553,7 @@ export function AuthProvider({ children }) {
     switchDemoRole,
     updateUserRole,
     updateUserDepartment,
+    updateUserAllowedAccounts,
     addOrPreauthorizeUser,
     deleteDirectoryUser,
     seedDefaultUsers,

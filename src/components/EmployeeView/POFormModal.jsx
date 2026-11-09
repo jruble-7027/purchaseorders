@@ -114,9 +114,13 @@ function SearchableAccountSelect({
 
       {isOpen && (
         <div className="absolute z-40 mt-1 w-full max-h-52 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-xl divide-y divide-slate-100 text-xs">
-          {filteredAccounts.length === 0 ? (
+          {accounts.length === 0 ? (
+            <div className="px-3 py-2.5 text-amber-800 bg-amber-50 font-medium">
+              No account numbers are currently assigned to your profile. Please contact the Business Office to have your GL account code(s) assigned.
+            </div>
+          ) : filteredAccounts.length === 0 ? (
             <div className="px-3 py-2.5 text-slate-400 italic">
-              No accounts starting with "{query}"
+              No assigned accounts starting with "{query}"
             </div>
           ) : (
             filteredAccounts.map((acct) => {
@@ -154,11 +158,24 @@ function SearchableAccountSelect({
 
 export default function POFormModal({ isOpen, onClose, initialData = null }) {
   const { currentUser } = useAuth();
-  const { expenseAccounts, expenseAccountsMap, previewNextPONumber, createPurchaseOrder, updatePurchaseOrder } = usePOs();
+  const {
+    expenseAccounts,
+    userExpenseAccounts,
+    expenseAccountsMap,
+    previewNextPONumber,
+    createPurchaseOrder,
+    updatePurchaseOrder
+  } = usePOs();
 
+  const availableAccounts = userExpenseAccounts || [];
   const isEditing = Boolean(initialData && initialData.id);
   const currentCalendarYear = new Date().getFullYear();
-  const defaultAccountId = initialData?.department_account_id || expenseAccounts[0]?.id || 'ACCT-566400';
+  const autoSingleAccountId = availableAccounts.length === 1 ? availableAccounts[0].id : '';
+  const defaultAccountId =
+    initialData?.department_account_id ||
+    autoSingleAccountId ||
+    availableAccounts[0]?.id ||
+    '';
 
   // Detect if initial PO is a credit card PO (e.g., Visa-4826)
   const initialIsCreditCard =
@@ -180,8 +197,19 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
   const [manualYearOverride, setManualYearOverride] = useState(false);
 
   const [departmentAccountId, setDepartmentAccountId] = useState(
-    initialData?.department_account_id || ''
+    initialData?.department_account_id || autoSingleAccountId || ''
   );
+
+  // If the staff member only has 1 assigned account, auto-fill it automatically
+  useEffect(() => {
+    if (!isEditing && availableAccounts.length === 1) {
+      const onlyId = availableAccounts[0].id;
+      setDepartmentAccountId((prev) => prev || onlyId);
+      setItems((prevItems) =>
+        prevItems.map((it) => (it.account_id ? it : { ...it, account_id: onlyId }))
+      );
+    }
+  }, [availableAccounts, isEditing]);
 
   // Normalize existing items or initialize first blank row
   const normalizeInitialItems = () => {
@@ -577,11 +605,18 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
           <div>
             {/* Left-aligned Searchable ACCOUNT # Field */}
             <div className="mb-3 max-w-md">
-              <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">
-                ACCOUNT # {poType === 'standard' ? '*' : '(Default for New Rows)'}
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                  ACCOUNT # {poType === 'standard' ? '*' : '(Default for New Rows)'}
+                </label>
+                {availableAccounts.length === 1 && (
+                  <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    Auto-filled (1 assigned account)
+                  </span>
+                )}
+              </div>
               <SearchableAccountSelect
-                accounts={expenseAccounts}
+                accounts={availableAccounts}
                 value={departmentAccountId}
                 onChange={(acctId) => setDepartmentAccountId(acctId)}
                 placeholder="Start typing account # (e.g. 566)..."
@@ -643,7 +678,7 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
                             1. Account (ACCT)
                           </label>
                           <SearchableAccountSelect
-                            accounts={expenseAccounts}
+                            accounts={availableAccounts}
                             value={item.account_id || departmentAccountId || defaultAccountId}
                             onChange={(acctId) => handleItemChange(idx, 'account_id', acctId)}
                             placeholder="Type account # (e.g. 566)..."

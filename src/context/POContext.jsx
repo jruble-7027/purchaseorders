@@ -446,19 +446,153 @@ export function POProvider({ children }) {
     }
   };
 
-  // Seed default department accounts into Firestore if empty
+  // Helper to normalize an account ID (e.g. "566400" -> "ACCT-566400")
+  const normalizeAccountId = (rawId) => {
+    const trimmed = String(rawId || '').trim().toUpperCase();
+    if (!trimmed) return '';
+    return trimmed.startsWith('ACCT-') ? trimmed : `ACCT-${trimmed}`;
+  };
+
+  // Add or Update a single Expense Account in Cloud Firestore
+  const saveExpenseAccount = async (accountData) => {
+    const id = normalizeAccountId(accountData.id);
+    if (!id) throw new Error('Account code is required.');
+
+    const cleanEmails = Array.from(
+      new Set(
+        (accountData.allowed_emails || [])
+          .map(e => String(e || '').trim().toLowerCase())
+          .filter(e => e && e.includes('@'))
+      )
+    );
+
+    const payload = {
+      id,
+      name: String(accountData.name || '').trim() || id,
+      dept: String(accountData.dept || 'General').trim(),
+      budget: Number(accountData.budget) || 0,
+      allowed_emails: cleanEmails
+    };
+
+    // Optimistic state update
+    setExpenseAccounts(prev => {
+      const idx = prev.findIndex(a => a.id === id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], ...payload };
+        if (!isFirebaseConfigured || !db) {
+          localStorage.setItem('wca_expense_accounts', JSON.stringify(next));
+        }
+        return next;
+      } else {
+        const next = [...prev, payload].sort((a, b) => a.id.localeCompare(b.id));
+        if (!isFirebaseConfigured || !db) {
+          localStorage.setItem('wca_expense_accounts', JSON.stringify(next));
+        }
+        return next;
+      }
+    });
+
+    if (isFirebaseConfigured && db) {
+      await setDoc(doc(db, 'expense_accounts', id), {
+        ...payload,
+        updated_at: serverTimestamp()
+      }, { merge: true });
+    }
+    return payload;
+  };
+
+  // Delete an Expense Account from Cloud Firestore
+  const deleteExpenseAccount = async (accountId) => {
+    if (!accountId) return;
+    setExpenseAccounts(prev => {
+      const next = prev.filter(a => a.id !== accountId);
+      if (!isFirebaseConfigured || !db) {
+        localStorage.setItem('wca_expense_accounts', JSON.stringify(next));
+      }
+      return next;
+    });
+
+    if (isFirebaseConfigured && db) {
+      await deleteDoc(doc(db, 'expense_accounts', accountId));
+    }
+  };
+
+  // Bulk import Expense Accounts from CSV / array into Cloud Firestore
+  const importExpenseAccounts = async (accountsList = []) => {
+    let importedCount = 0;
+    for (const raw of accountsList) {
+      const id = normalizeAccountId(raw.id || raw.code || raw.account_code);
+      if (!id) continue;
+      await saveExpenseAccount({
+        id,
+        name: raw.name || raw.account_name || raw.description || id,
+        dept: raw.dept || raw.department || 'General',
+        budget: Number(String(raw.budget || '0').replace(/[^0-9.-]/g, '')) || 0,
+        allowed_emails: Array.isArray(raw.allowed_emails)
+          ? raw.allowed_emails
+          : String(raw.allowed_emails || raw.assigned_emails || '')
+              .split(/[;,]/)
+              .map(s => s.trim().toLowerCase())
+              .filter(Boolean)
+      });
+      importedCount++;
+    }
+    return importedCount;
+  };
+
+  // Seed default department accounts into Firestore
   const seedDefaultAccounts = async () => {
     if (isFirebaseConfigured && db) {
       for (const acct of DEFAULT_EXPENSE_ACCOUNTS) {
-        await setDoc(doc(db, 'expense_accounts', acct.id), acct);
+        await setDoc(doc(db, 'expense_accounts', acct.id), acct, { merge: true });
       }
-      alert('Department expense codes successfully seeded to Cloud Firestore!');
     } else {
       localStorage.setItem('wca_expense_accounts', JSON.stringify(DEFAULT_EXPENSE_ACCOUNTS));
       setExpenseAccounts(DEFAULT_EXPENSE_ACCOUNTS);
-      alert('Reset default accounts in local preview mode.');
     }
   };
+
+  // Compute the Expense Accounts a given user is allowed to see
+  const getVisibleAccountsForUser = (targetUser = currentUser) => {
+    if (!targetUser) return [];
+    // Business Office Approvers and System Administrators can see all accounts
+    if (targetUser.role === 'admin' || targetUser.role === 'accountant') {
+      return expenseAccounts;
+    }
+
+    const emailLower = (targetUser.email || '').trim().toLowerCase();
+    const userAssignedIds = new Set(
+      (targetUser.allowed_accounts || []).map(code => normalizeAccountId(code))
+    );
+    const matchDept = Boolean(targetUser.match_department_accounts);
+    const userDeptLower = (targetUser.department || '').trim().toLowerCase();
+
+    return expenseAccounts.filter(acct => {
+      const acctId = normalizeAccountId(acct.id);
+      if (userAssignedIds.has(acctId) || userAssignedIds.has(acct.id)) {
+        return true;
+      }
+      if (
+        emailLower &&
+        Array.isArray(acct.allowed_emails) &&
+        acct.allowed_emails.some(e => String(e).trim().toLowerCase() === emailLower)
+      ) {
+        return true;
+      }
+      if (
+        matchDept &&
+        userDeptLower &&
+        acct.dept &&
+        acct.dept.trim().toLowerCase() === userDeptLower
+      ) {
+        return true;
+      }
+      return false;
+    });
+  };
+
+  const userExpenseAccounts = getVisibleAccountsForUser(currentUser);
 
   // Delete draft PO
   const deletePurchaseOrder = async (poId) => {
@@ -479,6 +613,8 @@ export function POProvider({ children }) {
   const value = {
     purchaseOrders,
     expenseAccounts,
+    userExpenseAccounts,
+    getVisibleAccountsForUser,
     expenseAccountsMap,
     loading,
     previewNextPONumber,
@@ -490,6 +626,9 @@ export function POProvider({ children }) {
     markPurchaseOrderPaid,
     deletePurchaseOrder,
     uploadReceiptFile,
+    saveExpenseAccount,
+    deleteExpenseAccount,
+    importExpenseAccounts,
     seedDefaultAccounts
   };
 
