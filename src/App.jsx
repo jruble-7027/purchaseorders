@@ -79,28 +79,27 @@ function MainPortal() {
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col">
         {loading ? (
           <div className="flex-1 flex flex-col items-center justify-center py-20">
-            <div className="w-10 h-10 rounded-full border-3 border-[#0C2340] border-t-amber-500 animate-spin mb-3" />
+            <div className="w-10 h-10 rounded-full border-3 border-zinc-800 border-t-[#ce1226] animate-spin mb-3" />
             <p className="text-xs font-medium text-slate-500">Verifying Wesleyan Google Workspace session...</p>
           </div>
         ) : !currentUser ? (
           <div className="flex-1 flex items-center justify-center py-12">
-            <div className="max-w-md w-full bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
-              <div className="bg-[#0C2340] px-6 py-8 text-center border-b border-amber-500/30">
-                <div className="w-14 h-14 mx-auto mb-4 rounded-xl bg-amber-500/20 border border-amber-400 flex items-center justify-center text-amber-300 shadow-inner">
-                  <FileText className="w-7 h-7" />
+            <div className="max-w-md w-full bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden">
+              <div className="bg-gradient-to-br from-[#111111] via-[#1a1113] to-[#45060d] px-6 py-8 text-center border-b-2 border-[#ce1226]">
+                <img
+                  src="/images/wca-logo-white.svg"
+                  alt="Wesleyan Christian Academy"
+                  className="h-14 w-auto mx-auto mb-4 object-contain"
+                />
+                <div className="inline-block px-3 py-0.5 rounded bg-[#ce1226] text-white text-[11px] font-bold uppercase tracking-widest shadow-sm">
+                  Purchase Order & Procurement Portal
                 </div>
-                <h1 className="text-xl font-bold text-white tracking-tight">
-                  Wesleyan Christian Academy
-                </h1>
-                <p className="text-xs text-amber-300 font-medium mt-1">
-                  Purchase Order Intake & Reporting Portal
-                </p>
               </div>
 
               <div className="p-6 sm:p-8 text-center space-y-5">
                 <div className="space-y-2">
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-semibold">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 text-[#ce1226] border border-red-200/70 text-[11px] font-semibold">
+                    <ShieldCheck className="w-3.5 h-3.5 text-[#ce1226]" />
                     <span>Google Workspace Authentication Required</span>
                   </div>
                   <p className="text-xs text-slate-600 leading-relaxed">
@@ -111,9 +110,9 @@ function MainPortal() {
                 <button
                   type="button"
                   onClick={loginWithGoogle}
-                  className="w-full py-3 px-4 rounded-xl bg-[#0C2340] hover:bg-slate-800 text-white font-semibold text-sm shadow-md hover:shadow-lg transition flex items-center justify-center gap-2.5 cursor-pointer"
+                  className="w-full py-3 px-4 rounded-xl bg-[#ce1226] hover:bg-[#a50e1e] text-white font-bold text-sm shadow-md hover:shadow-lg transition flex items-center justify-center gap-2.5 cursor-pointer"
                 >
-                  <LogIn className="w-4 h-4 text-amber-400" />
+                  <LogIn className="w-4 h-4 text-[#ffde6a]" />
                   <span>Sign In with Google SSO</span>
                 </button>
 
@@ -178,15 +177,19 @@ function MainPortal() {
       )}
 
       {/* Institutional Footer */}
-      <footer className="bg-white border-t border-slate-200 py-4 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2">
-          <div className="flex items-center space-x-2">
-            <span className="font-semibold text-slate-800">Wesleyan Christian Academy</span>
-            <span>•</span>
-            <span>Business & Procurement Department</span>
+      <footer className="bg-[#111111] border-t-2 border-[#ce1226] py-5 mt-auto text-zinc-400">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs gap-3">
+          <div className="flex items-center space-x-3">
+            <img
+              src="/images/wca-logo-white.svg"
+              alt="Wesleyan Christian Academy"
+              className="h-7 w-auto object-contain opacity-95"
+            />
+            <span className="text-zinc-600">•</span>
+            <span className="text-zinc-300 font-medium">Business & Procurement Department</span>
           </div>
-          <div>
-            Authorized for <span className="font-mono text-slate-700 font-semibold">@wcatrojans.org</span> & <span className="font-mono text-slate-700 font-semibold">@wesed.org</span> single sign-on
+          <div className="text-zinc-400">
+            Authorized for <span className="font-mono text-[#ffde6a] font-semibold">@wcatrojans.org</span> & <span className="font-mono text-[#ffde6a] font-semibold">@wesed.org</span> single sign-on
           </div>
         </div>
       </footer>

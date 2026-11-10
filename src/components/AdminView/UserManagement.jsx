@@ -318,16 +318,16 @@ export default function UserManagement() {
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-[#0C2340] to-slate-900 rounded-2xl p-6 text-white shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-gradient-to-r from-[#111111] via-[#1c1013] to-[#4a070e] border-b-2 border-[#ce1226] rounded-2xl p-6 text-white shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-400/20 text-amber-300 border border-amber-400/30 mb-2">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#ce1226]/30 text-[#ffde6a] border border-[#ce1226]/60 mb-2">
             System Administration Console
           </div>
           <h1 className="text-2xl font-bold tracking-tight">
             User Directory & Role Management
           </h1>
-          <p className="text-xs text-slate-300 mt-1 max-w-2xl">
-            Assign System Administrators, Business Office Approvers, and Faculty/Staff permissions for Wesleyan Christian Academy (@wcatrojans.org) accounts.
+          <p className="text-xs text-zinc-300 mt-1 max-w-2xl">
+            Assign System Administrators, Business Office Approvers, and Faculty/Staff permissions for Wesleyan Christian Academy (@wcatrojans.org & @wesed.org) accounts.
           </p>
         </div>
 
@@ -336,9 +336,9 @@ export default function UserManagement() {
             type="button"
             onClick={handleSeedUsers}
             title="Sync default WCA administrators, Business Office approvers, and staff into Firestore"
-            className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-slate-700/80 hover:bg-slate-700 text-slate-200 hover:text-white font-medium text-xs transition border border-slate-600"
+            className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-zinc-800/90 hover:bg-zinc-700 text-zinc-200 hover:text-white font-medium text-xs transition border border-zinc-600"
           >
-            <Database className="w-3.5 h-3.5 text-amber-400" />
+            <Database className="w-3.5 h-3.5 text-[#ffde6a]" />
             <span>Sync Default WCA Staff</span>
           </button>
 
@@ -348,9 +348,9 @@ export default function UserManagement() {
               setFormError(null);
               setIsAddModalOpen(true);
             }}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs shadow-md transition"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#ce1226] hover:bg-[#a50e1e] text-white font-semibold text-xs shadow-md transition"
           >
-            <UserPlus className="w-4 h-4" />
+            <UserPlus className="w-4 h-4 text-[#ffde6a]" />
             <span>Add / Pre-Authorize User</span>
           </button>
         </div>

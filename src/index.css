@@ -2,10 +2,53 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: "WCA Proxima Verified";
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: normal;
+  font-display: swap;
+  src: url("https://use.typekit.net/af/efe4a5/00000000000000007735e609/30/l?primer=7cdcb44be4a7db8877ffa5c0007b8dd865b3bbc383831fe2ea177f62257a9191&fvd=n4&v=3") format("woff2");
+}
+@font-face {
+  font-family: "WCA Proxima Verified";
+  font-style: normal;
+  font-weight: 700;
+  font-stretch: normal;
+  font-display: swap;
+  src: url("https://use.typekit.net/af/2555e1/00000000000000007735e603/30/l?primer=7cdcb44be4a7db8877ffa5c0007b8dd865b3bbc383831fe2ea177f62257a9191&fvd=n7&v=3") format("woff2");
+}
+@font-face {
+  font-family: "WCA Source Serif Verified";
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: normal;
+  font-display: swap;
+  src: url("https://use.typekit.net/af/ac5663/00000000000000007735a458/30/l?primer=7cdcb44be4a7db8877ffa5c0007b8dd865b3bbc383831fe2ea177f62257a9191&fvd=n4&v=3") format("woff2");
+}
+@font-face {
+  font-family: "WCA Source Serif Verified";
+  font-style: normal;
+  font-weight: 700;
+  font-stretch: normal;
+  font-display: swap;
+  src: url("https://use.typekit.net/af/923169/00000000000000007735a459/30/l?primer=7cdcb44be4a7db8877ffa5c0007b8dd865b3bbc383831fe2ea177f62257a9191&fvd=n7&v=3") format("woff2");
+}
+
+:root {
+  --wca-red: #ce1226;
+  --wca-red-dark: #a50e1e;
+  --wca-gold: #ffde6a;
+  --wca-charcoal: #141414;
+}
+
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-900;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    @apply bg-[#F6F6F7] text-slate-900;
+    font-family: 'WCA Proxima Verified', 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  h1, h2 {
+    font-family: 'WCA Source Serif Verified', 'Source Serif 4', Georgia, serif;
   }
 }
 

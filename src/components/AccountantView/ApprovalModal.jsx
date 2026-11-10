@@ -74,16 +74,16 @@ export default function ApprovalModal({ po, isOpen, onClose }) {
       <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200">
         
         {/* Header */}
-        <div className="bg-[#0C2340] text-white p-4 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-[#111111] via-[#1c1013] to-[#4a070e] border-b-2 border-[#ce1226] text-white p-4 flex items-center justify-between">
           <div>
             <h3 className="font-bold text-base">Business Office Review & Action</h3>
-            <p className="text-xs text-amber-300">
+            <p className="text-xs text-[#ffde6a]">
               {po.po_number} • {po.vendor_name} (${Number(po.total_amount).toFixed(2)})
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-slate-300 hover:text-white hover:bg-white/10"
+            className="p-1 rounded-lg text-zinc-300 hover:text-white hover:bg-white/10"
           >
             <X className="w-5 h-5" />
           </button>

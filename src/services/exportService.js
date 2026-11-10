@@ -149,7 +149,7 @@ export function printPurchaseOrder(po, expenseAccountsMap = {}) {
 
       return `
         <tr>
-          <td style="padding: 9px; border-bottom: 1px solid #e2e8f0; font-family: monospace; font-weight: 700; color: #0C2340;">${acctId}</td>
+          <td style="padding: 9px; border-bottom: 1px solid #e2e8f0; font-family: monospace; font-weight: 700; color: #ce1226;">${acctId}</td>
           <td style="padding: 9px; border-bottom: 1px solid #e2e8f0;">${vdr}</td>
           <td style="padding: 9px; border-bottom: 1px solid #e2e8f0;">${item.description}</td>
           <td style="padding: 9px; border-bottom: 1px solid #e2e8f0; text-align: right;">$${baseAmt.toFixed(2)}</td>
@@ -173,7 +173,7 @@ export function printPurchaseOrder(po, expenseAccountsMap = {}) {
       (log) => `
     <div style="font-size: 12px; margin-bottom: 6px; color: #475569;">
       <strong>${new Date(log.timestamp).toLocaleString()}</strong> - 
-      <span style="color: #0c2340; font-weight: 600;">[${log.action}]</span> 
+      <span style="color: #ce1226; font-weight: 600;">[${log.action}]</span> 
       ${log.actor_name || log.actor_email}: ${log.details}
     </div>
   `
@@ -186,29 +186,33 @@ export function printPurchaseOrder(po, expenseAccountsMap = {}) {
       <head>
         <title>Purchase Order - ${po.po_number}</title>
         <style>
-          body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; color: #0f172a; margin: 36px; line-height: 1.5; }
-          .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #0C2340; padding-bottom: 16px; margin-bottom: 24px; }
-          .title { font-size: 24px; font-weight: 700; color: #0C2340; margin: 0; }
-          .school { font-size: 14px; color: #64748b; font-weight: 500; }
-          .badge { display: inline-block; padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 700; text-transform: uppercase; background: #e2e8f0; }
+          body { font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; color: #0f172a; margin: 36px; line-height: 1.5; }
+          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #ce1226; padding-bottom: 16px; margin-bottom: 24px; }
+          .brand-wrap { display: flex; align-items: center; gap: 14px; }
+          .brand-logo { height: 48px; width: auto; }
+          .title { font-family: 'Source Serif 4', Georgia, serif; font-size: 22px; font-weight: 700; color: #141414; margin: 0; }
+          .school { font-size: 13px; color: #ce1226; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+          .badge { display: inline-block; padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 700; text-transform: uppercase; background: #f1f5f9; border: 1px solid #cbd5e1; }
           .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
           .info-block { background: #f8fafc; padding: 14px; border-radius: 6px; border: 1px solid #e2e8f0; }
           .info-label { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 600; margin-bottom: 4px; }
           .info-value { font-size: 14px; font-weight: 500; }
           table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 12px; }
-          th { background: #0C2340; color: white; padding: 9px; font-size: 11px; text-align: left; text-transform: uppercase; }
-          .total-box { text-align: right; font-size: 16px; font-weight: 700; margin-bottom: 20px; color: #0C2340; }
+          th { background: #141414; border-bottom: 2px solid #ce1226; color: white; padding: 9px; font-size: 11px; text-align: left; text-transform: uppercase; }
+          .total-box { text-align: right; font-size: 16px; font-weight: 700; margin-bottom: 20px; color: #ce1226; }
           .audit-section { margin-top: 24px; padding-top: 16px; border-top: 1px dashed #cbd5e1; }
         </style>
       </head>
       <body>
         <div class="header">
-          <div>
-            <h1 class="title">Wesleyan Christian Academy</h1>
-            <div class="school">Purchase Order Requisition & Verification Form</div>
+          <div class="brand-wrap">
+            <img src="/images/wca-logo-dark.svg" alt="Wesleyan Christian Academy" class="brand-logo" />
+            <div>
+              <div class="school">Purchase Order Requisition & Verification Form</div>
+            </div>
           </div>
           <div style="text-align: right;">
-            <div style="font-size: 20px; font-weight: 700; color: #0C2340;">${po.po_number}</div>
+            <div style="font-size: 20px; font-weight: 700; color: #ce1226; font-family: monospace;">${po.po_number}</div>
             <div class="badge">${po.status.replace('_', ' ')}</div>
           </div>
         </div>

@@ -71,24 +71,24 @@ export default function EmployeeDashboard({ onOpenNewPO, onSelectPO, onEditPO })
     <div className="space-y-6">
       
       {/* Top Banner & Quick Action */}
-      <div className="bg-gradient-to-r from-[#0C2340] to-slate-800 rounded-2xl p-6 text-white shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-gradient-to-r from-[#111111] via-[#1f1013] to-[#4a070e] border-b-2 border-[#ce1226] rounded-2xl p-6 text-white shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-400/20 text-amber-300 border border-amber-400/30 mb-2">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#ce1226]/30 text-[#ffde6a] border border-[#ce1226]/60 mb-2">
             Faculty & Staff Portal
           </div>
           <h1 className="text-2xl font-bold tracking-tight">
             Welcome, {currentUser?.displayName || 'Faculty Member'}
           </h1>
-          <p className="text-xs text-slate-300 mt-1 max-w-xl">
+          <p className="text-xs text-zinc-300 mt-1 max-w-xl">
             Submit new vendor requisitions, attach receipts/quotes, and monitor approval status by the Wesleyan Christian Academy Business Office in real time.
           </p>
         </div>
 
         <button
           onClick={onOpenNewPO}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm shadow-md transition-all hover:scale-[1.02] active:scale-[0.98]"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#ce1226] hover:bg-[#a50e1e] text-white font-bold text-sm shadow-md transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          <Plus className="w-5 h-5 text-slate-950 stroke-[2.5]" />
+          <Plus className="w-5 h-5 text-[#ffde6a] stroke-[2.5]" />
           <span>New Purchase Order</span>
         </button>
       </div>
@@ -151,7 +151,7 @@ export default function EmployeeDashboard({ onOpenNewPO, onSelectPO, onEditPO })
               onClick={() => setStatusFilter(tab.id)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
                 statusFilter === tab.id
-                  ? 'bg-[#0C2340] text-white shadow-sm'
+                  ? 'bg-[#ce1226] text-white shadow-sm'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
@@ -168,7 +168,7 @@ export default function EmployeeDashboard({ onOpenNewPO, onSelectPO, onEditPO })
             placeholder="Search PO #, vendor, purpose..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0C2340] focus:border-transparent outline-none"
+            className="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#ce1226] focus:border-transparent outline-none"
           />
         </div>
       </div>

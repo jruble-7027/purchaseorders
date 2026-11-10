@@ -339,10 +339,10 @@ export default function AccountCodesModal({ isOpen, onClose }) {
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
       <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[92vh] flex flex-col border border-slate-200 overflow-hidden">
         {/* Modal Header */}
-        <div className="bg-gradient-to-r from-[#0C2340] to-slate-900 px-6 py-4 text-white flex items-center justify-between">
+        <div className="bg-gradient-to-r from-[#111111] via-[#1c1013] to-[#4a070e] border-b-2 border-[#ce1226] px-6 py-4 text-white flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2 flex-wrap mb-1">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-400/20 text-amber-300 border border-amber-400/30">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#ce1226]/30 text-[#ffde6a] border border-[#ce1226]/60">
                 General Ledger & User Account Access
               </span>
               {fiscalYearInfo && (
@@ -354,14 +354,14 @@ export default function AccountCodesModal({ isOpen, onClose }) {
             <h2 className="text-lg font-bold tracking-tight">
               Manage WCA Expense Account Codes ({expenseAccounts.length})
             </h2>
-            <p className="text-xs text-slate-300">
+            <p className="text-xs text-zinc-300">
               Add, edit, delete, or import GL account codes, track June 1 fiscal year budgets, and assign staff access.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition"
+            className="p-2 rounded-lg text-zinc-300 hover:text-white hover:bg-white/10 transition"
           >
             <X className="w-5 h-5" />
           </button>

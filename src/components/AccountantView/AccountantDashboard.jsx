@@ -106,15 +106,15 @@ export default function AccountantDashboard({ onSelectPO, onOpenActionModal, onO
     <div className="space-y-6">
       
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-[#0C2340] to-slate-900 rounded-2xl p-6 text-white shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-gradient-to-r from-[#111111] via-[#1f1013] to-[#4a070e] border-b-2 border-[#ce1226] rounded-2xl p-6 text-white shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-400/20 text-amber-300 border border-amber-400/30 mb-2">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#ce1226]/30 text-[#ffde6a] border border-[#ce1226]/60 mb-2">
             Business Office / Accounting Console
           </div>
           <h1 className="text-2xl font-bold tracking-tight">
             Purchase Order Approvals & Expenditure Reporting
           </h1>
-          <p className="text-xs text-slate-300 mt-1 max-w-2xl">
+          <p className="text-xs text-zinc-300 mt-1 max-w-2xl">
             Live approval queue, departmental accounting codes, itemized audits, and 1-click export for Wesleyan Christian Academy finance compliance.
           </p>
         </div>
@@ -125,9 +125,9 @@ export default function AccountantDashboard({ onSelectPO, onOpenActionModal, onO
               type="button"
               onClick={onOpenUserManagement}
               title="Open User Directory & Role Management Console"
-              className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs transition shadow-md"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#ce1226] hover:bg-[#a50e1e] text-white font-semibold text-xs transition shadow-md"
             >
-              <Users className="w-3.5 h-3.5" />
+              <Users className="w-3.5 h-3.5 text-[#ffde6a]" />
               <span>User Management</span>
             </button>
           )}
@@ -136,9 +136,9 @@ export default function AccountantDashboard({ onSelectPO, onOpenActionModal, onO
             type="button"
             onClick={() => setIsAccountCodesModalOpen(true)}
             title="Manage WCA General Ledger expense accounts, CSV import/export, and staff account access"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-700/80 hover:bg-slate-700 text-slate-100 hover:text-white font-semibold text-xs transition border border-slate-600 shadow-sm"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-zinc-800/90 hover:bg-zinc-700 text-zinc-100 hover:text-white font-semibold text-xs transition border border-zinc-600 shadow-sm"
           >
-            <Database className="w-3.5 h-3.5 text-amber-400" />
+            <Database className="w-3.5 h-3.5 text-[#ffde6a]" />
             <span>Manage Account Codes</span>
           </button>
 

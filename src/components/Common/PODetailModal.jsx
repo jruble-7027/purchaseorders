@@ -59,14 +59,14 @@ export default function PODetailModal({ po, onClose, onOpenActionModal, onEditDr
       <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full my-8 overflow-hidden border border-slate-200">
         
         {/* Header */}
-        <div className="bg-[#0C2340] text-white p-5 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-[#111111] via-[#1c1013] to-[#4a070e] border-b-2 border-[#ce1226] text-white p-5 flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div>
               <div className="flex items-center space-x-2">
                 <span className="text-xl font-bold tracking-tight text-white">{po.po_number}</span>
                 <StatusBadge status={po.status} />
               </div>
-              <p className="text-xs text-amber-400 mt-0.5">
+              <p className="text-xs text-[#ffde6a] mt-0.5">
                 Wesleyan Christian Academy Requisition
               </p>
             </div>
@@ -78,12 +78,12 @@ export default function PODetailModal({ po, onClose, onOpenActionModal, onEditDr
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/10 hover:bg-white/20 text-white transition"
               title="Print Official PO Requisition"
             >
-              <Printer className="w-4 h-4 text-amber-300" />
+              <Printer className="w-4 h-4 text-[#ffde6a]" />
               <span>Print Form</span>
             </button>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition"
+              className="p-1.5 rounded-lg text-zinc-300 hover:text-white hover:bg-white/10 transition"
             >
               <X className="w-5 h-5" />
             </button>
@@ -382,7 +382,7 @@ export default function PODetailModal({ po, onClose, onOpenActionModal, onEditDr
                   onClose();
                   onOpenActionModal(po);
                 }}
-                className="px-4 py-1.5 bg-[#0C2340] hover:bg-slate-800 text-white font-semibold text-xs rounded-lg transition"
+                className="px-4 py-1.5 bg-[#ce1226] hover:bg-[#a50e1e] text-white font-semibold text-xs rounded-lg transition"
               >
                 Review & Take Action
               </button>
