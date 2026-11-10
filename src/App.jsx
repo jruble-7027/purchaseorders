@@ -188,8 +188,8 @@ function MainPortal() {
             <span className="text-zinc-600">•</span>
             <span className="text-zinc-300 font-medium">Business & Procurement Department</span>
           </div>
-          <div className="text-zinc-400">
-            Authorized for <span className="font-mono text-[#ffde6a] font-semibold">@wcatrojans.org</span> & <span className="font-mono text-[#ffde6a] font-semibold">@wesed.org</span> single sign-on
+          <div className="text-zinc-400 text-center sm:text-right">
+            If you experience authentication issues or need account access, please submit an <span className="text-[#ffde6a] font-medium">IT Support Ticket</span>.
           </div>
         </div>
       </footer>
