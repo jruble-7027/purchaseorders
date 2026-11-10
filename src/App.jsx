@@ -117,7 +117,7 @@ function MainPortal() {
                 </button>
 
                 <div className="pt-3 border-t border-slate-100 text-[11px] text-slate-400">
-                  Restricted to authorized <span className="font-mono font-semibold text-slate-600">@wcatrojans.org</span> and <span className="font-mono font-semibold text-slate-600">@wesed.org</span> accounts
+                  Authorized internal staff only. Sessions are monitored and logged for security.
                 </div>
               </div>
             </div>
