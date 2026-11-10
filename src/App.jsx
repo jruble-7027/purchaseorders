@@ -8,10 +8,10 @@ import AccountantDashboard from './components/AccountantView/AccountantDashboard
 import ApprovalModal from './components/AccountantView/ApprovalModal';
 import UserManagement from './components/AdminView/UserManagement';
 import PODetailModal from './components/Common/PODetailModal';
-import { AlertTriangle, Lock } from 'lucide-react';
+import { AlertTriangle, Lock, LogIn, ShieldCheck, FileText } from 'lucide-react';
 
 function MainPortal() {
-  const { currentUser, authError, setAuthError } = useAuth();
+  const { currentUser, loading, loginWithGoogle, authError, setAuthError } = useAuth();
   const [activeTab, setActiveTab] = useState('employee'); // 'employee' | 'accountant' | 'users'
   const hasInitializedTab = useRef(false);
 
@@ -27,16 +27,26 @@ function MainPortal() {
       hasInitializedTab.current = true;
       if (currentUser.role === 'admin' || currentUser.role === 'accountant') {
         setActiveTab('accountant');
+      } else {
+        setActiveTab('employee');
       }
+    } else if (!currentUser) {
+      hasInitializedTab.current = false;
+      setIsFormOpen(false);
+      setEditingPO(null);
+      setSelectedPO(null);
+      setActionPO(null);
     }
   }, [currentUser]);
 
   const handleOpenNewPO = () => {
+    if (!currentUser) return;
     setEditingPO(null);
     setIsFormOpen(true);
   };
 
   const handleEditPO = (po) => {
+    if (!currentUser) return;
     setEditingPO(po);
     setIsFormOpen(true);
   };
@@ -66,8 +76,54 @@ function MainPortal() {
       )}
 
       {/* Main App Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {activeTab === 'users' ? (
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col">
+        {loading ? (
+          <div className="flex-1 flex flex-col items-center justify-center py-20">
+            <div className="w-10 h-10 rounded-full border-3 border-[#0C2340] border-t-amber-500 animate-spin mb-3" />
+            <p className="text-xs font-medium text-slate-500">Verifying Wesleyan Google Workspace session...</p>
+          </div>
+        ) : !currentUser ? (
+          <div className="flex-1 flex items-center justify-center py-12">
+            <div className="max-w-md w-full bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
+              <div className="bg-[#0C2340] px-6 py-8 text-center border-b border-amber-500/30">
+                <div className="w-14 h-14 mx-auto mb-4 rounded-xl bg-amber-500/20 border border-amber-400 flex items-center justify-center text-amber-300 shadow-inner">
+                  <FileText className="w-7 h-7" />
+                </div>
+                <h1 className="text-xl font-bold text-white tracking-tight">
+                  Wesleyan Christian Academy
+                </h1>
+                <p className="text-xs text-amber-300 font-medium mt-1">
+                  Purchase Order Intake & Reporting Portal
+                </p>
+              </div>
+
+              <div className="p-6 sm:p-8 text-center space-y-5">
+                <div className="space-y-2">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-semibold">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Google Workspace Authentication Required</span>
+                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Please sign in with your Wesleyan Christian Academy Google account to submit purchase orders, upload receipts, or review department budgets.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={loginWithGoogle}
+                  className="w-full py-3 px-4 rounded-xl bg-[#0C2340] hover:bg-slate-800 text-white font-semibold text-sm shadow-md hover:shadow-lg transition flex items-center justify-center gap-2.5 cursor-pointer"
+                >
+                  <LogIn className="w-4 h-4 text-amber-400" />
+                  <span>Sign In with Google SSO</span>
+                </button>
+
+                <div className="pt-3 border-t border-slate-100 text-[11px] text-slate-400">
+                  Restricted to authorized <span className="font-mono font-semibold text-slate-600">@wcatrojans.org</span> and <span className="font-mono font-semibold text-slate-600">@wesed.org</span> accounts
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : activeTab === 'users' ? (
           <UserManagement />
         ) : activeTab === 'accountant' ? (
           <AccountantDashboard
@@ -85,7 +141,7 @@ function MainPortal() {
       </main>
 
       {/* New / Edit PO Form Modal */}
-      {isFormOpen && (
+      {currentUser && isFormOpen && (
         <POFormModal
           isOpen={isFormOpen}
           onClose={() => {
@@ -97,7 +153,7 @@ function MainPortal() {
       )}
 
       {/* PO Full Detail & Audit Modal */}
-      {selectedPO && (
+      {currentUser && selectedPO && (
         <PODetailModal
           po={selectedPO}
           onClose={() => setSelectedPO(null)}
@@ -113,7 +169,7 @@ function MainPortal() {
       )}
 
       {/* Accountant Action / Approval Modal */}
-      {actionPO && (
+      {currentUser && actionPO && (
         <ApprovalModal
           po={actionPO}
           isOpen={Boolean(actionPO)}
@@ -130,7 +186,7 @@ function MainPortal() {
             <span>Business & Procurement Department</span>
           </div>
           <div>
-            Authorized for <span className="font-mono text-slate-700 font-semibold">@wcatrojans.org</span> single sign-on
+            Authorized for <span className="font-mono text-slate-700 font-semibold">@wcatrojans.org</span> & <span className="font-mono text-slate-700 font-semibold">@wesed.org</span> single sign-on
           </div>
         </div>
       </footer>

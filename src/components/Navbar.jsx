@@ -50,63 +50,65 @@ export default function Navbar({ activeTab, setActiveTab }) {
             {/* Navigation & Role Controls */}
             <div className="flex items-center space-x-3 sm:space-x-4">
               
-              {/* View & Role Switcher Pill */}
-              <div className="bg-slate-800/80 p-1 rounded-lg border border-slate-700 flex items-center text-xs">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (isDemoMode) switchDemoRole('employee');
-                    setActiveTab('employee');
-                  }}
-                  className={`px-3 py-1.5 rounded-md font-medium transition-all flex items-center gap-1.5 ${
-                    activeTab === 'employee'
-                      ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
-                      : 'text-slate-300 hover:text-white'
-                  }`}
-                >
-                  <UserCheck className="w-3.5 h-3.5" />
-                  <span className="hidden md:inline">Staff Faculty</span>
-                  <span className="md:hidden">Faculty</span>
-                </button>
-
-                {canAccessBusinessOffice && (
+              {/* View & Role Switcher Pill (Only shown when signed in) */}
+              {currentUser && (
+                <div className="bg-slate-800/80 p-1 rounded-lg border border-slate-700 flex items-center text-xs">
                   <button
                     type="button"
                     onClick={() => {
-                      if (isDemoMode) switchDemoRole('accountant');
-                      setActiveTab('accountant');
+                      if (isDemoMode) switchDemoRole('employee');
+                      setActiveTab('employee');
                     }}
                     className={`px-3 py-1.5 rounded-md font-medium transition-all flex items-center gap-1.5 ${
-                      activeTab === 'accountant'
+                      activeTab === 'employee'
                         ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
                         : 'text-slate-300 hover:text-white'
                     }`}
                   >
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span className="hidden md:inline">Business Office</span>
-                    <span className="md:hidden">Approver</span>
+                    <UserCheck className="w-3.5 h-3.5" />
+                    <span className="hidden md:inline">Staff Faculty</span>
+                    <span className="md:hidden">Faculty</span>
                   </button>
-                )}
 
-                {canAccessUserAdmin && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (isDemoMode) switchDemoRole('admin');
-                      setActiveTab('users');
-                    }}
-                    className={`px-3 py-1.5 rounded-md font-medium transition-all flex items-center gap-1.5 ${
-                      activeTab === 'users'
-                        ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
-                        : 'text-slate-300 hover:text-white'
-                    }`}
-                  >
-                    <Users className="w-3.5 h-3.5" />
-                    <span className="hidden md:inline">User Management</span>
-                    <span className="md:hidden">Users</span>
-                  </button>
-                )}
-              </div>
+                  {canAccessBusinessOffice && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isDemoMode) switchDemoRole('accountant');
+                        setActiveTab('accountant');
+                      }}
+                      className={`px-3 py-1.5 rounded-md font-medium transition-all flex items-center gap-1.5 ${
+                        activeTab === 'accountant'
+                          ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
+                          : 'text-slate-300 hover:text-white'
+                      }`}
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span className="hidden md:inline">Business Office</span>
+                      <span className="md:hidden">Approver</span>
+                    </button>
+                  )}
+
+                  {canAccessUserAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isDemoMode) switchDemoRole('admin');
+                        setActiveTab('users');
+                      }}
+                      className={`px-3 py-1.5 rounded-md font-medium transition-all flex items-center gap-1.5 ${
+                        activeTab === 'users'
+                          ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
+                          : 'text-slate-300 hover:text-white'
+                      }`}
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      <span className="hidden md:inline">User Management</span>
+                      <span className="md:hidden">Users</span>
+                    </button>
+                  )}
+                </div>
+              )}
 
               {/* User Profile / Auth */}
               {currentUser ? (
