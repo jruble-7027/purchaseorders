@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { usePOs } from '../../context/POContext';
+import { DEFAULT_VENDORS } from '../../config/defaultVendors';
 import {
   X,
   Plus,
@@ -16,6 +17,111 @@ import {
   Save,
   Send
 } from 'lucide-react';
+
+/**
+ * Searchable Vendor input with autocomplete suggestions from default and historical vendors
+ */
+function SearchableVendorInput({
+  vendors = [],
+  value = '',
+  onChange,
+  placeholder = 'e.g. Amazon Business, Staples, CDW-G...',
+  compact = false,
+  icon: Icon = Building,
+  iconColor = 'text-slate-400'
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const trimmed = (value || '').trim().toLowerCase();
+  const matchingVendors = vendors.filter((v) => {
+    if (!trimmed) return true;
+    return v.toLowerCase().includes(trimmed);
+  }).slice(0, 8); // Top 8 matching
+
+  return (
+    <div ref={containerRef} className="relative w-full">
+      <div className="relative">
+        <Icon className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none ${iconColor}`} />
+        <input
+          type="text"
+          required
+          placeholder={placeholder}
+          value={value}
+          onFocus={() => setIsOpen(true)}
+          onChange={(e) => {
+            onChange(e.target.value);
+            setIsOpen(true);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              setIsOpen(false);
+            }
+          }}
+          className={`w-full pl-9 pr-7 ${
+            compact ? 'py-1.5 text-xs' : 'py-2 text-sm'
+          } border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0C2340] focus:border-transparent outline-none bg-white font-medium text-slate-800`}
+        />
+        {value && (
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={() => {
+              onChange('');
+              setIsOpen(true);
+            }}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+
+      {isOpen && matchingVendors.length > 0 && (
+        <div className="absolute z-50 mt-1 w-full max-h-52 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-xl divide-y divide-slate-100 text-xs">
+          <div className="px-2.5 py-1 bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex justify-between items-center">
+            <span>Suggested Vendors</span>
+            <span className="text-slate-400 font-normal">Click or type custom</span>
+          </div>
+          {matchingVendors.map((vendorName, i) => (
+            <button
+              key={`${vendorName}_${i}`}
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onChange(vendorName);
+                setIsOpen(false);
+              }}
+              className="w-full text-left px-3 py-1.5 hover:bg-amber-50 hover:text-amber-900 flex items-center justify-between transition group"
+            >
+              <div className="flex items-center gap-2 truncate">
+                <Building className="w-3.5 h-3.5 text-slate-400 group-hover:text-amber-600 shrink-0" />
+                <span className="font-semibold text-slate-800 group-hover:text-amber-900 truncate">
+                  {vendorName}
+                </span>
+              </div>
+              {vendorName.toLowerCase() === trimmed && (
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded">
+                  Selected
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * Searchable Account # selector.
@@ -178,6 +284,7 @@ function SearchableAccountSelect({
 export default function POFormModal({ isOpen, onClose, initialData = null }) {
   const { currentUser } = useAuth();
   const {
+    purchaseOrders,
     expenseAccounts,
     userExpenseAccounts,
     expenseAccountsMap,
@@ -187,6 +294,17 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
     createPurchaseOrder,
     updatePurchaseOrder
   } = usePOs();
+
+  // Aggregate all unique historical and pre-seeded vendor names
+  const allUniqueVendors = Array.from(
+    new Set([
+      ...DEFAULT_VENDORS,
+      ...(purchaseOrders || []).map((p) => p.vendor_name).filter(Boolean),
+      ...(purchaseOrders || [])
+        .flatMap((p) => (p.items || []).map((it) => it.vendor))
+        .filter(Boolean)
+    ])
+  ).sort((a, b) => a.localeCompare(b));
 
   const availableAccounts = userExpenseAccounts || [];
   const isEditing = Boolean(initialData && initialData.id);
@@ -550,25 +668,18 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
                   </button>
                 )}
               </div>
-              <div className="relative">
-                {poType === 'credit_card' ? (
-                  <CreditCard className="w-4 h-4 absolute left-3 top-2.5 text-amber-600" />
-                ) : (
-                  <Building className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-                )}
-                <input
-                  type="text"
-                  required
-                  placeholder={
-                    poType === 'credit_card'
-                      ? 'e.g. Visa-4826'
-                      : 'e.g. Amazon Business, Lab Tech Supply Co., Staples'
-                  }
-                  value={vendorName}
-                  onChange={(e) => setVendorName(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0C2340] focus:border-transparent outline-none bg-white"
-                />
-              </div>
+              <SearchableVendorInput
+                vendors={poType === 'credit_card' ? ['Visa-4826', ...allUniqueVendors] : allUniqueVendors}
+                value={vendorName}
+                onChange={setVendorName}
+                placeholder={
+                  poType === 'credit_card'
+                    ? 'e.g. Visa-4826'
+                    : 'Search vendor (e.g. Amazon, CDW, Staples)...'
+                }
+                icon={poType === 'credit_card' ? CreditCard : Building}
+                iconColor={poType === 'credit_card' ? 'text-amber-600' : 'text-slate-400'}
+              />
             </div>
 
             {/* Purchase Date */}
@@ -771,16 +882,16 @@ export default function POFormModal({ isOpen, onClose, initialData = null }) {
                         <label className="block lg:hidden text-[10px] font-bold uppercase text-slate-500 mb-0.5">
                           2. Vendor / Merchant
                         </label>
-                        <input
-                          type="text"
+                        <SearchableVendorInput
+                          vendors={allUniqueVendors}
+                          value={item.vendor}
+                          onChange={(val) => handleItemChange(idx, 'vendor', val)}
                           placeholder={
                             poType === 'credit_card'
                               ? 'e.g. Amazon, Staples'
                               : vendorName || 'Vendor / Store'
                           }
-                          value={item.vendor}
-                          onChange={(e) => handleItemChange(idx, 'vendor', e.target.value)}
-                          className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-md focus:ring-1 focus:ring-[#0C2340] outline-none"
+                          compact
                         />
                       </div>
 

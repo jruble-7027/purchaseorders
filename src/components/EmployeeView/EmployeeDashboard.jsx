@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { usePOs } from '../../context/POContext';
 import StatusBadge from '../StatusBadge';
+import { printPurchaseOrder } from '../../services/exportService';
 import {
   Plus,
   Search,
@@ -13,7 +14,9 @@ import {
   CheckCircle,
   AlertCircle,
   FileText,
-  DollarSign
+  DollarSign,
+  PackageCheck,
+  Printer
 } from 'lucide-react';
 
 export default function EmployeeDashboard({ onOpenNewPO, onSelectPO, onEditPO }) {
@@ -38,6 +41,7 @@ export default function EmployeeDashboard({ onOpenNewPO, onSelectPO, onEditPO })
   const totalCount = myPOs.length;
   const pendingCount = myPOs.filter(p => p.status === 'pending_approval').length;
   const approvedCount = myPOs.filter(p => p.status === 'approved' || p.status === 'paid').length;
+  const receivedCount = myPOs.filter(p => p.status === 'received' || p.is_received).length;
   const rejectedCount = myPOs.filter(p => p.status === 'rejected').length;
 
   const totalValue = myPOs.reduce((sum, p) => sum + (parseFloat(p.total_amount) || 0), 0);
@@ -48,6 +52,7 @@ export default function EmployeeDashboard({ onOpenNewPO, onSelectPO, onEditPO })
       statusFilter === 'ALL' ||
       (statusFilter === 'PENDING' && po.status === 'pending_approval') ||
       (statusFilter === 'APPROVED' && (po.status === 'approved' || po.status === 'paid')) ||
+      (statusFilter === 'RECEIVED' && (po.status === 'received' || po.is_received)) ||
       (statusFilter === 'REJECTED' && po.status === 'rejected') ||
       (statusFilter === 'DRAFT' && po.status === 'draft');
 
@@ -142,7 +147,8 @@ export default function EmployeeDashboard({ onOpenNewPO, onSelectPO, onEditPO })
           {[
             { id: 'ALL', label: 'All My POs' },
             { id: 'PENDING', label: 'Pending' },
-            { id: 'APPROVED', label: 'Approved' },
+            { id: 'APPROVED', label: 'Approved & Paid' },
+            { id: 'RECEIVED', label: 'Received' },
             { id: 'REJECTED', label: 'Needs Revision' },
             { id: 'DRAFT', label: 'Drafts' }
           ].map((tab) => (
@@ -259,6 +265,15 @@ export default function EmployeeDashboard({ onOpenNewPO, onSelectPO, onEditPO })
                           </div>
                         ) : (
                           <div className="flex items-center justify-end space-x-1.5">
+                            <button
+                              type="button"
+                              onClick={() => printPurchaseOrder(po, expenseAccountsMap)}
+                              className="p-1.5 text-slate-500 hover:text-[#0C2340] rounded hover:bg-slate-100 transition"
+                              title="Print Official PO Requisition"
+                            >
+                              <Printer className="w-4 h-4" />
+                            </button>
+
                             <button
                               type="button"
                               onClick={() => onSelectPO(po)}

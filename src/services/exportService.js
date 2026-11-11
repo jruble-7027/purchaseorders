@@ -1,5 +1,6 @@
 /**
- * Service to generate CSV exports and print-friendly PO audit documents
+ * Service to generate CSV exports and print-friendly / PDF-ready PO audit documents
+ * for Wesleyan Christian Academy
  */
 
 export function exportPOsToCSV(purchaseOrders, expenseAccountsMap = {}) {
@@ -22,6 +23,10 @@ export function exportPOsToCSV(purchaseOrders, expenseAccountsMap = {}) {
     'Tax ($)',
     'Total Amount ($)',
     'Status',
+    'Received Status',
+    'Received By',
+    'Received At',
+    'Receiving Notes',
     'School Purpose / Justification',
     'Approval Notes',
     'Payment Reference',
@@ -90,6 +95,10 @@ export function exportPOsToCSV(purchaseOrders, expenseAccountsMap = {}) {
       escapeCSV(sumTax.toFixed(2)),
       escapeCSV(Number(po.total_amount).toFixed(2)),
       escapeCSV(po.status),
+      escapeCSV(po.is_received || po.status === 'received' ? 'YES' : 'NO'),
+      escapeCSV(po.received_by || ''),
+      escapeCSV(po.received_at ? new Date(po.received_at).toLocaleString() : ''),
+      escapeCSV(po.receiving_notes || ''),
       escapeCSV(po.school_purpose),
       escapeCSV(po.approval_notes || po.rejection_reason || ''),
       escapeCSV(po.payment_reference || ''),
@@ -112,16 +121,18 @@ export function exportPOsToCSV(purchaseOrders, expenseAccountsMap = {}) {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Generates an official, high-resolution Wesleyan Christian Academy
+ * Purchase Order voucher formatted for Letter print and PDF download.
+ *
+ * Uses direct in-window printing with @page margin suppression to eliminate
+ * browser default headers/footers (such as "about:blank") and replaces it with
+ * the required WCA AP notice: "Send all invoices referencing PO# ... to acctspay@wcatrojans.org"
+ */
 export function printPurchaseOrder(po, expenseAccountsMap = {}) {
   const deptInfo = expenseAccountsMap[po.department_account_id]
     ? `${po.department_account_id} - ${expenseAccountsMap[po.department_account_id].name}`
-    : po.department_account_id || '';
-
-  const printWindow = window.open('', '_blank', 'width=900,height=900');
-  if (!printWindow) {
-    window.print();
-    return;
-  }
+    : po.department_account_id || 'N/A';
 
   const accountSubtotals = {};
   let sumAmt = 0;
@@ -129,13 +140,14 @@ export function printPurchaseOrder(po, expenseAccountsMap = {}) {
   let sumTax = 0;
 
   const itemsHtml = (po.items || [])
-    .map((item) => {
+    .map((item, idx) => {
       const acctId = item.account_id || po.department_account_id || '';
       const vdr = item.vendor || po.vendor_name || '';
+      const qty = item.qty !== undefined && item.qty !== '' ? Number(item.qty) || 1 : 1;
       const baseAmt =
         item.amount !== undefined
           ? Number(item.amount) || 0
-          : (Number(item.qty) || 1) * (Number(item.unit_price) || 0);
+          : qty * (Number(item.unit_price) || 0);
       const sh = Number(item.shipping_handling) || 0;
       const tax = Number(item.tax) || 0;
       const rowTotal = item.total !== undefined ? Number(item.total) || 0 : baseAmt + sh + tax;
@@ -148,14 +160,15 @@ export function printPurchaseOrder(po, expenseAccountsMap = {}) {
       }
 
       return `
-        <tr>
-          <td style="padding: 9px; border-bottom: 1px solid #e2e8f0; font-family: monospace; font-weight: 700; color: #ce1226;">${acctId}</td>
-          <td style="padding: 9px; border-bottom: 1px solid #e2e8f0;">${vdr}</td>
-          <td style="padding: 9px; border-bottom: 1px solid #e2e8f0;">${item.description}</td>
-          <td style="padding: 9px; border-bottom: 1px solid #e2e8f0; text-align: right;">$${baseAmt.toFixed(2)}</td>
-          <td style="padding: 9px; border-bottom: 1px solid #e2e8f0; text-align: right;">$${sh.toFixed(2)}</td>
-          <td style="padding: 9px; border-bottom: 1px solid #e2e8f0; text-align: right;">$${tax.toFixed(2)}</td>
-          <td style="padding: 9px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: 700;">$${rowTotal.toFixed(2)}</td>
+        <tr style="background-color: ${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+          <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-family: monospace; font-weight: 700; color: #ce1226; font-size: 10.5px;">${acctId}</td>
+          <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 10.5px;">${vdr}</td>
+          <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 10.5px; font-weight: 500;">${item.description || 'N/A'}</td>
+          <td style="padding: 6px 8px; border: 1px solid #cbd5e1; text-align: center; font-size: 10.5px;">${qty}</td>
+          <td style="padding: 6px 8px; border: 1px solid #cbd5e1; text-align: right; font-size: 10.5px;">$${baseAmt.toFixed(2)}</td>
+          <td style="padding: 6px 8px; border: 1px solid #cbd5e1; text-align: right; font-size: 10.5px;">$${sh.toFixed(2)}</td>
+          <td style="padding: 6px 8px; border: 1px solid #cbd5e1; text-align: right; font-size: 10.5px;">$${tax.toFixed(2)}</td>
+          <td style="padding: 6px 8px; border: 1px solid #cbd5e1; text-align: right; font-weight: 700; color: #0f172a; font-size: 10.5px;">$${rowTotal.toFixed(2)}</td>
         </tr>
       `;
     })
@@ -164,134 +177,428 @@ export function printPurchaseOrder(po, expenseAccountsMap = {}) {
   const accountSummaryHtml = Object.entries(accountSubtotals)
     .map(([acctId, sumVal]) => {
       const acctName = expenseAccountsMap[acctId]?.name ? ` (${expenseAccountsMap[acctId].name})` : '';
-      return `<span style="display:inline-block; margin-right: 14px; padding: 4px 10px; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px;"><strong>${acctId}</strong>${acctName}: <strong>$${sumVal.toFixed(2)}</strong></span>`;
+      return `<div style="display:inline-block; margin-right: 10px; margin-bottom: 4px; padding: 3px 8px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 10.5px;">
+        <span style="font-family:monospace; font-weight:700; color:#ce1226;">${acctId}</span>${acctName}: <strong>$${sumVal.toFixed(2)}</strong>
+      </div>`;
     })
     .join('');
+
+  const statusLabel = (po.status || 'pending_approval').replace(/_/g, ' ').toUpperCase();
+  const statusColor =
+    po.status === 'approved'
+      ? '#059669'
+      : po.status === 'paid'
+      ? '#2563eb'
+      : po.status === 'received'
+      ? '#7c3aed'
+      : po.status === 'rejected'
+      ? '#dc2626'
+      : '#d97706';
 
   const logsHtml = (po.audit_logs || [])
     .map(
       (log) => `
-    <div style="font-size: 12px; margin-bottom: 6px; color: #475569;">
-      <strong>${new Date(log.timestamp).toLocaleString()}</strong> - 
-      <span style="color: #ce1226; font-weight: 600;">[${log.action}]</span> 
-      ${log.actor_name || log.actor_email}: ${log.details}
+    <div style="font-size: 9.5px; margin-bottom: 2px; color: #475569; border-bottom: 1px dotted #e2e8f0; padding-bottom: 2px;">
+      <span style="font-family:monospace; color:#64748b;">${new Date(log.timestamp).toLocaleString()}</span> — 
+      <strong style="color: #ce1226;">[${log.action}]</strong> 
+      <strong>${log.actor_name || log.actor_email}</strong> (${log.actor_role}): ${log.details}
     </div>
   `
     )
     .join('');
 
-  printWindow.document.write(`
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <title>Purchase Order - ${po.po_number}</title>
-        <style>
-          body { font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; color: #0f172a; margin: 36px; line-height: 1.5; }
-          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #ce1226; padding-bottom: 16px; margin-bottom: 24px; }
-          .brand-wrap { display: flex; align-items: center; gap: 14px; }
-          .brand-logo { height: 48px; width: auto; }
-          .title { font-family: 'Source Serif 4', Georgia, serif; font-size: 22px; font-weight: 700; color: #141414; margin: 0; }
-          .school { font-size: 13px; color: #ce1226; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
-          .badge { display: inline-block; padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 700; text-transform: uppercase; background: #f1f5f9; border: 1px solid #cbd5e1; }
-          .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
-          .info-block { background: #f8fafc; padding: 14px; border-radius: 6px; border: 1px solid #e2e8f0; }
-          .info-label { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 600; margin-bottom: 4px; }
-          .info-value { font-size: 14px; font-weight: 500; }
-          table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 12px; }
-          th { background: #141414; border-bottom: 2px solid #ce1226; color: white; padding: 9px; font-size: 11px; text-align: left; text-transform: uppercase; }
-          .total-box { text-align: right; font-size: 16px; font-weight: 700; margin-bottom: 20px; color: #ce1226; }
-          .audit-section { margin-top: 24px; padding-top: 16px; border-top: 1px dashed #cbd5e1; }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <div class="brand-wrap">
-            <img src="/images/wca-logo-dark.svg" alt="Wesleyan Christian Academy" class="brand-logo" />
+  // Clean up any previously injected print containers
+  const existingArea = document.getElementById('wca-po-print-area');
+  if (existingArea) existingArea.remove();
+  const existingStyles = document.getElementById('wca-po-print-styles');
+  if (existingStyles) existingStyles.remove();
+
+  // Inject Print Styles
+  const styleEl = document.createElement('style');
+  styleEl.id = 'wca-po-print-styles';
+  styleEl.innerHTML = `
+    @media screen {
+      #wca-po-print-area {
+        display: none !important;
+      }
+    }
+    @media print {
+      @page {
+        size: letter portrait;
+        margin: 0mm !important;
+      }
+      html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        color: #0f172a !important;
+        width: 100% !important;
+        height: auto !important;
+      }
+      #root {
+        display: none !important;
+      }
+      #wca-po-print-area {
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: space-between !important;
+        min-height: 100vh !important;
+        box-sizing: border-box !important;
+        padding: 12mm 14mm 12mm 14mm !important;
+        font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif !important;
+        font-size: 11px !important;
+        line-height: 1.35 !important;
+        background: #ffffff !important;
+        color: #0f172a !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      #wca-po-print-area * {
+        box-sizing: border-box !important;
+      }
+      .po-print-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        border-bottom: 3px solid #ce1226;
+        padding-bottom: 10px;
+        margin-bottom: 12px;
+      }
+      .po-print-brand {
+        font-size: 18px;
+        font-weight: 800;
+        color: #0f172a;
+        letter-spacing: -0.02em;
+        text-transform: uppercase;
+      }
+      .po-print-sub {
+        font-size: 10px;
+        color: #475569;
+        margin-top: 2px;
+      }
+      .po-print-docname {
+        margin-top: 4px;
+        font-size: 10px;
+        font-weight: 700;
+        color: #ce1226;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .po-print-badge-wrap {
+        text-align: right;
+      }
+      .po-print-num {
+        font-size: 22px;
+        font-weight: 900;
+        color: #ce1226;
+        font-family: monospace;
+        letter-spacing: 0.05em;
+      }
+      .po-print-status {
+        display: inline-block;
+        margin-top: 3px;
+        padding: 3px 10px;
+        border-radius: 9999px;
+        font-size: 9px;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: white;
+        background: ${statusColor};
+      }
+      .po-info-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .po-card {
+        background: #f8fafc;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        padding: 8px 10px;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .po-card-label {
+        font-size: 8.5px;
+        text-transform: uppercase;
+        font-weight: 800;
+        color: #64748b;
+        letter-spacing: 0.04em;
+        margin-bottom: 2px;
+      }
+      .po-card-value {
+        font-size: 11px;
+        font-weight: 600;
+        color: #0f172a;
+      }
+      .po-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 10px;
+      }
+      .po-table th {
+        background: #0f172a !important;
+        color: #ffffff !important;
+        font-size: 9px;
+        text-transform: uppercase;
+        font-weight: 700;
+        padding: 6px 8px;
+        border: 1px solid #0f172a;
+        text-align: left;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .po-totals-wrap {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 10px;
+      }
+      .po-grand-total {
+        text-align: right;
+        background: #f8fafc;
+        border: 2px solid #ce1226;
+        border-radius: 6px;
+        padding: 8px 12px;
+        min-width: 220px;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .po-sig-section {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 10px;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #cbd5e1;
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+      .po-sig-box {
+        background: #ffffff;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        padding: 8px;
+        font-size: 9.5px;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .po-sig-line {
+        margin-top: 24px;
+        border-top: 1px solid #0f172a;
+        padding-top: 3px;
+        font-weight: 600;
+      }
+      .po-audit-box {
+        margin-top: 8px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        padding: 6px 8px;
+        page-break-inside: avoid;
+        break-inside: avoid;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .po-bottom-footer {
+        margin-top: 12px;
+        padding-top: 8px;
+        border-top: 1.5px solid #0f172a;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 10px;
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+      .po-bottom-footer .invoice-notice {
+        font-weight: 800;
+        color: #ce1226;
+        letter-spacing: 0.02em;
+      }
+    }
+  `;
+  document.head.appendChild(styleEl);
+
+  // Build the print element
+  const printContainer = document.createElement('div');
+  printContainer.id = 'wca-po-print-area';
+  printContainer.innerHTML = `
+    <div>
+      <!-- Header -->
+      <div class="po-print-header">
+        <div>
+          <div class="po-print-brand">Wesleyan Christian Academy</div>
+          <div class="po-print-sub">
+            1917 N. Centennial St. • High Point, NC 27262 • (336) 884-3333 • Business & Procurement
+          </div>
+          <div class="po-print-docname">
+            Official Purchase Order & Disbursement Requisition
+          </div>
+        </div>
+        <div class="po-print-badge-wrap">
+          <div class="po-print-num">${po.po_number || 'PO-DRAFT'}</div>
+          <div><span class="po-print-status">${statusLabel}</span></div>
+        </div>
+      </div>
+
+      <!-- Metadata Cards -->
+      <div class="po-info-grid">
+        <div class="po-card">
+          <div class="po-card-label">Requisitioner / Faculty Staff</div>
+          <div class="po-card-value">${po.employee_name || 'Staff Faculty'}</div>
+          <div style="font-size: 10px; color: #64748b;">${po.employee_email || ''}</div>
+          
+          <div class="po-card-label" style="margin-top: 6px;">Primary Department / Account</div>
+          <div class="po-card-value" style="font-size: 10px;">${deptInfo}</div>
+        </div>
+
+        <div class="po-card">
+          <div class="po-card-label">Vendor / Merchant / Supplier</div>
+          <div class="po-card-value" style="font-size: 12.5px; font-weight: 700; color: #ce1226;">${po.vendor_name || 'Vendor'}</div>
+          
+          <div style="display: flex; justify-content: space-between; margin-top: 6px;">
             <div>
-              <div class="school">Purchase Order Requisition & Verification Form</div>
+              <div class="po-card-label">Purchase Date</div>
+              <div class="po-card-value">${po.purchase_date || 'N/A'}</div>
+            </div>
+            <div>
+              <div class="po-card-label">PO Type</div>
+              <div class="po-card-value">${po.po_type === 'credit_card' ? 'Split Acct. / Card' : 'Standard PO'}</div>
             </div>
           </div>
-          <div style="text-align: right;">
-            <div style="font-size: 20px; font-weight: 700; color: #ce1226; font-family: monospace;">${po.po_number}</div>
-            <div class="badge">${po.status.replace('_', ' ')}</div>
-          </div>
         </div>
+      </div>
 
-        <div class="info-grid">
-          <div class="info-block">
-            <div class="info-label">Requisitioner / Employee</div>
-            <div class="info-value">${po.employee_name || 'Staff Faculty'} (${po.employee_email})</div>
-            <div class="info-label" style="margin-top: 10px;">Primary Account</div>
-            <div class="info-value">${deptInfo}</div>
-          </div>
-          <div class="info-block">
-            <div class="info-label">Vendor / Credit Card</div>
-            <div class="info-value" style="font-size: 16px; font-weight: 600;">${po.vendor_name}</div>
-            <div class="info-label" style="margin-top: 10px;">Purchase Date</div>
-            <div class="info-value">${po.purchase_date}</div>
-          </div>
-        </div>
+      <!-- Educational Justification -->
+      <div class="po-card" style="margin-bottom: 10px;">
+        <div class="po-card-label">School Purpose / Educational Justification</div>
+        <div style="font-size: 10.5px; color: #1e293b; font-weight: 500;">${po.school_purpose || 'Standard classroom / departmental supplies and educational operations.'}</div>
+      </div>
 
-        <div class="info-block" style="margin-bottom: 20px;">
-          <div class="info-label">School Purpose / Educational Justification</div>
-          <div class="info-value">${po.school_purpose || 'N/A'}</div>
-        </div>
+      <!-- Itemized Table -->
+      <table class="po-table">
+        <thead>
+          <tr>
+            <th style="width: 95px;">ACCT #</th>
+            <th style="width: 120px;">Vendor</th>
+            <th>Description / Item Details</th>
+            <th style="width: 35px; text-align: center;">QTY</th>
+            <th style="width: 70px; text-align: right;">Amount</th>
+            <th style="width: 60px; text-align: right;">S/H</th>
+            <th style="width: 60px; text-align: right;">Tax</th>
+            <th style="width: 75px; text-align: right;">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsHtml}
+        </tbody>
+      </table>
 
-        <table>
-          <thead>
-            <tr>
-              <th style="width: 110px;">ACCT</th>
-              <th style="width: 130px;">Vendor</th>
-              <th>Description</th>
-              <th style="text-align: right; width: 85px;">Amount</th>
-              <th style="text-align: right; width: 75px;">S/H</th>
-              <th style="text-align: right; width: 75px;">Tax</th>
-              <th style="text-align: right; width: 95px;">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsHtml}
-          </tbody>
-        </table>
-
-        <div class="info-block" style="margin-bottom: 16px;">
-          <div class="info-label" style="margin-bottom: 6px;">Subtotals by Account Number (ACCT)</div>
+      <!-- Totals & Subtotals Breakdown -->
+      <div class="po-totals-wrap">
+        <div style="flex: 1; margin-right: 12px;">
+          <div class="po-card-label" style="margin-bottom: 3px;">GL Account Distribution Breakdown</div>
           <div>${accountSummaryHtml}</div>
         </div>
 
-        <div class="total-box">
-          <span style="font-size: 12px; color: #475569; margin-right: 16px;">Amount: $${sumAmt.toFixed(2)} | S/H: $${sumSH.toFixed(2)} | Tax: $${sumTax.toFixed(2)}</span>
-          Grand Total: $${Number(po.total_amount).toFixed(2)}
-        </div>
-
-        ${po.approval_notes ? `
-          <div class="info-block" style="border-left: 4px solid #10b981; margin-bottom: 20px;">
-            <div class="info-label" style="color: #047857;">Accountant Approval Verification</div>
-            <div class="info-value">${po.approval_notes} (Approved by: ${po.approved_by || 'Business Office'})</div>
+        <div class="po-grand-total">
+          <div style="font-size: 10px; color: #64748b; margin-bottom: 2px;">
+            Subtotal: <strong>$${sumAmt.toFixed(2)}</strong> | S/H: <strong>$${sumSH.toFixed(2)}</strong> | Tax: <strong>$${sumTax.toFixed(2)}</strong>
           </div>
-        ` : ''}
-
-        ${po.payment_reference ? `
-          <div class="info-block" style="border-left: 4px solid #3b82f6; margin-bottom: 20px;">
-            <div class="info-label" style="color: #1d4ed8;">Disbursement / Payment Reference</div>
-            <div class="info-value">${po.payment_reference}</div>
+          <div style="font-size: 16px; font-weight: 900; color: #ce1226;">
+            Grand Total: $${Number(po.total_amount || (sumAmt + sumSH + sumTax)).toFixed(2)}
           </div>
-        ` : ''}
-
-        <div class="audit-section">
-          <h3 style="font-size: 13px; text-transform: uppercase; color: #475569; margin-bottom: 10px;">Audit Trail & System Compliance Log</h3>
-          ${logsHtml}
         </div>
+      </div>
 
-        <script>
-          window.onload = function() {
-            setTimeout(function() {
-              window.print();
-            }, 300);
-          }
-        </script>
-      </body>
-    </html>
-  `);
-  printWindow.document.close();
+      <!-- Receiving Details if received -->
+      ${(po.is_received || po.status === 'received') ? `
+        <div class="po-card" style="border-left: 4px solid #7c3aed; margin-bottom: 8px; background: #faf5ff;">
+          <div class="po-card-label" style="color: #6b21a8;">Receiving & Physical Delivery Verification</div>
+          <div style="font-size: 10.5px; color: #581c87;">
+            <strong>Received By:</strong> ${po.received_by || 'Staff'} on ${po.received_at ? new Date(po.received_at).toLocaleDateString() : 'N/A'}<br/>
+            <strong>Verification Notes:</strong> ${po.receiving_notes || 'All items delivered and verified in good condition.'}
+            ${(po.packing_slip_receipts && po.packing_slip_receipts.length > 0) ? `<br/><strong>Packing Slips:</strong> ${po.packing_slip_receipts.length} attachment(s) verified on file.` : ''}
+          </div>
+        </div>
+      ` : ''}
+
+      <!-- Approval / Payment Notes -->
+      ${po.approval_notes ? `
+        <div class="po-card" style="border-left: 4px solid #059669; margin-bottom: 8px; background: #f0fdf4;">
+          <div class="po-card-label" style="color: #047857;">Business Office Approval Verification</div>
+          <div style="font-size: 10.5px; color: #065f46;">
+            ${po.approval_notes} (Approved by: ${po.approved_by || 'Business Office'})
+          </div>
+        </div>
+      ` : ''}
+
+      ${po.payment_reference ? `
+        <div class="po-card" style="border-left: 4px solid #2563eb; margin-bottom: 8px; background: #eff6ff;">
+          <div class="po-card-label" style="color: #1d4ed8;">Disbursement & Check / ACH Reference</div>
+          <div style="font-size: 10.5px; color: #1e40af;">
+            ${po.payment_reference}
+          </div>
+        </div>
+      ` : ''}
+
+      <!-- Formal 3-Part Signature Blocks -->
+      <div class="po-sig-section">
+        <div class="po-sig-box">
+          <div class="po-card-label">1. Faculty Requisitioner</div>
+          <div style="color:#64748b;">${po.employee_name || 'Staff Faculty'}</div>
+          <div class="po-sig-line">Signature & Date</div>
+        </div>
+        <div class="po-sig-box">
+          <div class="po-card-label">2. Department / Admin Approver</div>
+          <div style="color:#64748b;">${po.approved_by || 'Supervisor / Principal'}</div>
+          <div class="po-sig-line">Signature & Date</div>
+        </div>
+        <div class="po-sig-box">
+          <div class="po-card-label">3. Business Office / AP</div>
+          <div style="color:#64748b;">Wesleyan Business Office</div>
+          <div class="po-sig-line">Signature & Date</div>
+        </div>
+      </div>
+
+      <!-- Compliance & Audit Log -->
+      <div class="po-audit-box">
+        <div class="po-card-label" style="margin-bottom: 2px;">System Compliance Audit Trail (PO ID: ${po.id || 'N/A'})</div>
+        ${logsHtml}
+      </div>
+    </div>
+
+    <!-- Bottom Left/Right Formal Footer Notice -->
+    <div class="po-bottom-footer">
+      <div class="invoice-notice">
+        Send all invoices referencing PO# ${po.po_number || ''} to acctspay@wcatrojans.org
+      </div>
+      <div style="font-size: 9.5px; color: #64748b; font-family: monospace;">
+        PO #: ${po.po_number || ''} • WCA Business Office
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(printContainer);
+
+  const cleanup = () => {
+    if (printContainer && printContainer.parentNode) {
+      printContainer.remove();
+    }
+    if (styleEl && styleEl.parentNode) {
+      styleEl.remove();
+    }
+    window.removeEventListener('afterprint', cleanup);
+  };
+
+  window.addEventListener('afterprint', cleanup);
+
+  // Trigger print
+  setTimeout(() => {
+    window.print();
+    // Safety fallback cleanup in case afterprint doesn't fire
+    setTimeout(cleanup, 2000);
+  }, 100);
 }

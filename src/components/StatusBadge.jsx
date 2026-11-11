@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock, CheckCircle2, XCircle, DollarSign, FileEdit } from 'lucide-react';
+import { Clock, CheckCircle2, XCircle, DollarSign, FileEdit, PackageCheck } from 'lucide-react';
 
 export default function StatusBadge({ status, className = '' }) {
   const configs = {
@@ -14,6 +14,12 @@ export default function StatusBadge({ status, className = '' }) {
       bg: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       icon: CheckCircle2,
       dot: 'bg-emerald-500'
+    },
+    received: {
+      label: 'Received / Delivered',
+      bg: 'bg-purple-50 text-purple-700 border-purple-200',
+      icon: PackageCheck,
+      dot: 'bg-purple-500'
     },
     paid: {
       label: 'Paid / Reimbursed',

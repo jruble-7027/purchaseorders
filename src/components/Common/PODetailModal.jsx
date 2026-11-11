@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { usePOs } from '../../context/POContext';
 import StatusBadge from '../StatusBadge';
 import ReceiptViewer from './ReceiptViewer';
+import MarkReceivedModal from './MarkReceivedModal';
 import { printPurchaseOrder } from '../../services/exportService';
 import {
   Printer,
@@ -14,13 +15,15 @@ import {
   FileCheck2,
   DollarSign,
   AlertCircle,
-  Trash2
+  Trash2,
+  PackageCheck
 } from 'lucide-react';
 
 export default function PODetailModal({ po, onClose, onOpenActionModal, onEditDraft }) {
   const { currentUser } = useAuth();
   const { expenseAccountsMap, deletePurchaseOrder } = usePOs();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isMarkReceivedOpen, setIsMarkReceivedOpen] = useState(false);
 
   if (!po) return null;
 
@@ -250,6 +253,49 @@ export default function PODetailModal({ po, onClose, onOpenActionModal, onEditDr
             <ReceiptViewer receipts={po.receipt_urls} />
           </div>
 
+          {/* Receiving Verification & Packing Slip Details */}
+          {(po.status === 'received' || po.is_received) && (
+            <div className="p-4 bg-purple-50 border border-purple-200 rounded-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-purple-100 flex items-center justify-center">
+                    <PackageCheck className="w-4 h-4 text-purple-700" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-purple-950 uppercase tracking-wide">
+                      Receiving Verification & Delivery Confirmation
+                    </h5>
+                    {po.received_at && (
+                      <p className="text-[11px] text-purple-700">
+                        Received on {new Date(po.received_at).toLocaleDateString()} at {new Date(po.received_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {po.received_by && ` • By ${po.received_by}`}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-200/70 text-purple-900 border border-purple-300">
+                  Goods Received
+                </span>
+              </div>
+
+              {po.receiving_notes && (
+                <div className="bg-white/80 p-3 rounded-lg border border-purple-100 text-xs text-purple-950">
+                  <span className="font-semibold text-purple-900">Receiving Notes: </span>
+                  {po.receiving_notes}
+                </div>
+              )}
+
+              {po.packing_slip_receipts && po.packing_slip_receipts.length > 0 && (
+                <div>
+                  <h6 className="text-[11px] font-bold text-purple-900 uppercase tracking-wider mb-1.5">
+                    Attached Packing Slips & Bills of Lading ({po.packing_slip_receipts.length})
+                  </h6>
+                  <ReceiptViewer receipts={po.packing_slip_receipts} />
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Status Decision Details */}
           {po.status === 'approved' && po.approval_notes && (
             <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-lg flex items-start space-x-2 text-xs">
@@ -388,6 +434,18 @@ export default function PODetailModal({ po, onClose, onOpenActionModal, onEditDr
               </button>
             )}
 
+            {/* Mark as Received Button */}
+            {(po.status === 'approved' || po.status === 'paid') && !po.is_received && po.status !== 'received' && (
+              <button
+                type="button"
+                onClick={() => setIsMarkReceivedOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs rounded-lg shadow-sm transition"
+              >
+                <PackageCheck className="w-3.5 h-3.5" />
+                <span>Mark as Received</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={onClose}
@@ -399,6 +457,17 @@ export default function PODetailModal({ po, onClose, onOpenActionModal, onEditDr
         </div>
 
       </div>
+
+      {/* Mark Received Modal */}
+      <MarkReceivedModal
+        po={po}
+        isOpen={isMarkReceivedOpen}
+        onClose={() => setIsMarkReceivedOpen(false)}
+        onReceivedSuccess={() => {
+          setIsMarkReceivedOpen(false);
+          onClose();
+        }}
+      />
     </div>
   );
 }

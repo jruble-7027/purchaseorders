@@ -446,6 +446,54 @@ export function POProvider({ children }) {
     }
   };
 
+  // Action: Mark as Received / Delivered (with optional packing slip attachments)
+  const markPurchaseOrderReceived = async (poId, receivingNotes = '', packingSlipFiles = []) => {
+    const now = new Date().toISOString();
+    const existing = purchaseOrders.find(p => p.id === poId);
+    if (!existing) return;
+
+    const uploadedPackingSlips = [...(existing.packing_slip_receipts || [])];
+    for (const file of packingSlipFiles) {
+      if (file instanceof File) {
+        const meta = await uploadReceiptFile(file, `${existing.po_number}-PACKING-SLIP`);
+        uploadedPackingSlips.push(meta);
+      }
+    }
+
+    const updatedData = {
+      status: 'received',
+      is_received: true,
+      received_at: now,
+      received_by: currentUser?.displayName || currentUser?.email || 'Faculty Staff',
+      receiving_notes: receivingNotes || 'All items delivered and verified in good condition.',
+      packing_slip_receipts: uploadedPackingSlips,
+      updated_at: now,
+      audit_logs: [
+        ...(existing.audit_logs || []),
+        {
+          id: `log_${Date.now()}`,
+          timestamp: now,
+          actor_name: currentUser?.displayName || 'Faculty Staff',
+          actor_email: currentUser?.email || 'staff@wcatrojans.org',
+          actor_role: currentUser?.role || 'employee',
+          action: 'RECEIVED',
+          details: `Marked as Received/Delivered. ${receivingNotes ? `Notes: ${receivingNotes}. ` : ''}${uploadedPackingSlips.length > (existing.packing_slip_receipts || []).length ? `(${uploadedPackingSlips.length - (existing.packing_slip_receipts || []).length} packing slip attachment(s) uploaded)` : ''}`
+        }
+      ]
+    };
+
+    if (isFirebaseConfigured && db) {
+      await updateDoc(doc(db, 'purchase_orders', poId), {
+        ...updatedData,
+        updated_at: serverTimestamp()
+      });
+    } else {
+      const updatedList = purchaseOrders.map(p => p.id === poId ? { ...p, ...updatedData } : p);
+      syncDemoState(updatedList);
+    }
+    return updatedData;
+  };
+
   // Helper to normalize an account ID (e.g. "566400" -> "ACCT-566400")
   const normalizeAccountId = (rawId) => {
     const trimmed = String(rawId || '').trim().toUpperCase();
@@ -778,6 +826,7 @@ export function POProvider({ children }) {
     approvePurchaseOrder,
     rejectPurchaseOrder,
     markPurchaseOrderPaid,
+    markPurchaseOrderReceived,
     deletePurchaseOrder,
     uploadReceiptFile,
     saveExpenseAccount,

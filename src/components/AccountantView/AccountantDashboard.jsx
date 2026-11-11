@@ -356,6 +356,7 @@ export default function AccountantDashboard({ onSelectPO, onOpenActionModal, onO
               <option value="pending_approval">Pending Approval</option>
               <option value="approved">Approved</option>
               <option value="paid">Paid / Reimbursed</option>
+              <option value="received">Received (Goods Verified)</option>
               <option value="rejected">Needs Revision</option>
               <option value="draft">Drafts</option>
             </select>
