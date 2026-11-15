@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
   FileText,
@@ -9,12 +9,104 @@ import {
   LogIn,
   Sliders,
   Sparkles,
-  Info
+  Info,
+  LayoutGrid,
+  Home,
+  Bus,
+  FileSpreadsheet,
+  Headphones,
+  ExternalLink
 } from 'lucide-react';
+
+const DEFAULT_SWITCHER_APPS = [
+  {
+    name: 'WCA Home',
+    subtitle: 'Faculty & Staff Hub',
+    url: 'https://wca-home-131845667297.us-east1.run.app',
+    color: 'crimson'
+  },
+  {
+    name: 'Bus Trips',
+    subtitle: 'Trip Reservations',
+    url: 'https://trips-131845667297.us-east1.run.app',
+    color: 'gold'
+  },
+  {
+    name: 'Purchase Orders',
+    subtitle: 'Requisitions & POs',
+    url: 'https://purchaseorders-903ee.web.app',
+    color: 'emerald'
+  },
+  {
+    name: 'WCA Helpdesk',
+    subtitle: 'IT Support Tickets',
+    url: 'https://wca-tickets-58f6c.web.app',
+    color: 'blue'
+  }
+];
+
+function getSwitcherIcon(app) {
+  const n = (app.name || '').toLowerCase();
+  if (n.includes('home') || n.includes('hub')) return Home;
+  if (n.includes('trip') || n.includes('bus')) return Bus;
+  if (n.includes('purchase') || n.includes('po')) return FileSpreadsheet;
+  if (n.includes('help') || n.includes('ticket')) return Headphones;
+  return LayoutGrid;
+}
+
+function getSwitcherColorClasses(color) {
+  switch (color) {
+    case 'crimson': return 'bg-red-100 text-[#CE1226]';
+    case 'gold': return 'bg-amber-100 text-amber-800';
+    case 'emerald': return 'bg-emerald-100 text-emerald-700';
+    case 'blue': return 'bg-blue-100 text-blue-700';
+    case 'purple': return 'bg-purple-100 text-purple-700';
+    default: return 'bg-slate-200 text-slate-800';
+  }
+}
 
 export default function Navbar({ activeTab, setActiveTab }) {
   const { currentUser, isDemoMode, loginWithGoogle, logout, switchDemoRole } = useAuth();
   const [showConfigModal, setShowConfigModal] = useState(false);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [switcherApps, setSwitcherApps] = useState(DEFAULT_SWITCHER_APPS);
+  const closeTimerRef = useRef(null);
+  const switcherRef = useRef(null);
+
+  useEffect(() => {
+    fetch('https://wca-home-131845667297.us-east1.run.app/api/switcher-apps')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && Array.isArray(data.apps) && data.apps.length > 0) {
+          setSwitcherApps(data.apps);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (switcherRef.current && !switcherRef.current.contains(e.target)) {
+        setSwitcherOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleMouseEnter = () => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    setSwitcherOpen(true);
+  };
+
+  const handleMouseLeave = () => {
+    closeTimerRef.current = setTimeout(() => {
+      setSwitcherOpen(false);
+    }, 220);
+  };
 
   const canAccessBusinessOffice =
     isDemoMode || currentUser?.role === 'accountant' || currentUser?.role === 'admin';
@@ -120,37 +212,156 @@ export default function Navbar({ activeTab, setActiveTab }) {
                   )}
                 </div>
 
-                {/* User Profile / Auth */}
-                <div className="flex items-center space-x-2 pl-2 border-l border-zinc-700">
-                  <img
-                    src={currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || 'Staff')}&background=ce1226&color=ffffff`}
-                    alt={currentUser.displayName}
-                    className="w-8 h-8 rounded-full border border-[#ce1226] object-cover"
-                  />
-                  <div className="hidden lg:block text-left">
-                    <div className="text-xs font-semibold text-zinc-100 truncate max-w-[140px]">
-                      {currentUser.displayName}
+                {/* User Profile / Google SSO + WCA Quick-Launch App Switcher */}
+                <div
+                  ref={switcherRef}
+                  onMouseEnter={handleMouseEnter}
+                  onMouseLeave={handleMouseLeave}
+                  className="relative flex items-center pl-2 border-l border-zinc-700"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSwitcherOpen((prev) => !prev)}
+                    className="flex items-center space-x-2.5 pl-1.5 pr-3 py-1 rounded-full bg-white/5 hover:bg-white/10 border border-zinc-700 hover:border-[#ffde6a]/70 transition-all focus:outline-none"
+                  >
+                    <img
+                      src={currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || 'Staff')}&background=ce1226&color=ffffff`}
+                      alt={currentUser.displayName}
+                      referrerPolicy="no-referrer"
+                      className="w-8 h-8 rounded-full border-2 border-[#ce1226] object-cover flex-shrink-0"
+                    />
+                    <div className="hidden lg:block text-left leading-tight">
+                      <div className="text-xs font-semibold text-zinc-100 truncate max-w-[130px]">
+                        {currentUser.displayName}
+                      </div>
+                      <div className="text-[10px] text-[#ffde6a] font-medium capitalize">
+                        {currentUser.role === 'admin' ? 'System Administrator' : currentUser.role === 'accountant' ? 'Business Office' : 'Faculty / Staff'}
+                      </div>
                     </div>
-                    <div className="text-[10px] text-[#ffde6a] font-medium capitalize">
-                      {currentUser.role === 'admin' ? 'System Administrator' : currentUser.role === 'accountant' ? 'Business Office' : 'Faculty / Staff'}
+                    <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-[#ffde6a]">
+                      <LayoutGrid className="w-3.5 h-3.5" />
                     </div>
-                  </div>
-                  {isDemoMode ? (
+                  </button>
+
+                  {isDemoMode && (
                     <button
                       onClick={() => setShowConfigModal(true)}
                       title="Firebase Integration Status"
-                      className="p-1.5 rounded-md text-[#ffde6a] hover:text-white hover:bg-zinc-800 transition"
+                      className="ml-1.5 p-1.5 rounded-md text-[#ffde6a] hover:text-white hover:bg-zinc-800 transition"
                     >
                       <Sparkles className="w-4 h-4" />
                     </button>
-                  ) : (
-                    <button
-                      onClick={logout}
-                      title="Log Out"
-                      className="p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition"
-                    >
-                      <LogOut className="w-4 h-4" />
-                    </button>
+                  )}
+
+                  {/* Hover / Click WCA App Switcher Dropdown */}
+                  {switcherOpen && (
+                    <div className="absolute right-0 top-full mt-2.5 w-80 sm:w-96 rounded-2xl bg-white text-slate-800 shadow-2xl border border-slate-200/90 overflow-hidden z-50 origin-top-right">
+                      {/* Header */}
+                      <div className="bg-gradient-to-br from-[#0b1c2d] via-[#132c47] to-[#52070F] px-5 py-3.5 text-white flex items-center justify-between border-b border-white/10">
+                        <div className="flex items-center space-x-2">
+                          <LayoutGrid className="w-4 h-4 text-[#ffde6a]" />
+                          <span className="font-extrabold text-xs uppercase tracking-wider text-white">
+                            WCA Quick-Launch Switcher
+                          </span>
+                        </div>
+                        {currentUser.role === 'admin' ? (
+                          <a
+                            href="https://wca-home-131845667297.us-east1.run.app/admin#switcher-section"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] font-bold text-[#ffde6a] hover:underline flex items-center gap-1"
+                          >
+                            <Sliders className="w-3 h-3" />
+                            <span>Manage</span>
+                          </a>
+                        ) : (
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-[#ffde6a]/90">
+                            SSO Connected
+                          </span>
+                        )}
+                      </div>
+
+                      {/* 2x2 App Grid */}
+                      <div className="p-3.5 bg-slate-50/70 grid grid-cols-2 gap-2.5">
+                        {switcherApps.map((app, idx) => {
+                          const IconComp = getSwitcherIcon(app);
+                          const isHere =
+                            (app.url || '').includes(window.location.host) ||
+                            (app.name || '').toLowerCase().includes('purchase');
+                          const colorCls = getSwitcherColorClasses(app.color);
+
+                          return (
+                            <a
+                              key={idx}
+                              href={app.url}
+                              target={isHere ? undefined : '_blank'}
+                              rel={isHere ? undefined : 'noopener noreferrer'}
+                              className={`group relative flex items-start space-x-3 p-3 rounded-xl border transition-all ${
+                                isHere
+                                  ? 'bg-amber-50/90 border-amber-400 ring-1 ring-amber-400/50 shadow-sm'
+                                  : 'bg-white border-slate-200/80 hover:border-[#0b1c2d] hover:shadow-md'
+                              }`}
+                            >
+                              <div
+                                className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm transition-transform group-hover:scale-105 ${colorCls}`}
+                              >
+                                <IconComp className="w-5 h-5" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className="font-extrabold text-xs text-slate-900 group-hover:text-[#CE1226] truncate">
+                                    {app.name}
+                                  </span>
+                                  {isHere ? (
+                                    <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-amber-400 text-slate-950">
+                                      Here
+                                    </span>
+                                  ) : (
+                                    <ExternalLink className="w-3 h-3 text-slate-300 group-hover:text-[#CE1226] transition-colors flex-shrink-0" />
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                                  {app.subtitle}
+                                </p>
+                              </div>
+                            </a>
+                          );
+                        })}
+                      </div>
+
+                      {/* Bottom User Profile & Sign Out */}
+                      <div className="px-4 py-3.5 bg-white border-t border-slate-200/80">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center space-x-2.5 min-w-0">
+                            <img
+                              src={currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || 'Staff')}&background=ce1226&color=ffffff`}
+                              alt=""
+                              referrerPolicy="no-referrer"
+                              className="w-9 h-9 rounded-full object-cover border border-[#ce1226] flex-shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <div className="text-xs font-extrabold text-slate-900 truncate flex items-center gap-1.5">
+                                <span className="truncate">{currentUser.displayName}</span>
+                                <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 text-[9px] font-black uppercase">
+                                  {currentUser.role === 'admin' ? 'Admin' : currentUser.role === 'accountant' ? 'Approver' : 'Staff'}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-slate-500 truncate">{currentUser.email}</div>
+                            </div>
+                          </div>
+                          {!isDemoMode && (
+                            <button
+                              type="button"
+                              onClick={logout}
+                              className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50 transition-colors flex items-center gap-1 flex-shrink-0"
+                            >
+                              <LogOut className="w-3.5 h-3.5" />
+                              <span>Sign Out</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
 
