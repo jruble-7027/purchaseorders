@@ -16,9 +16,10 @@ import {
   Hash
 } from 'lucide-react';
 
-export default function AccountCodesModal({ isOpen, onClose }) {
+export default function AccountCodesModal({ isOpen, onClose, readOnly = false }) {
   const {
     expenseAccounts,
+    userExpenseAccounts,
     fiscalYearInfo,
     getAccountBudgetStats,
     saveExpenseAccount,
@@ -26,7 +27,8 @@ export default function AccountCodesModal({ isOpen, onClose }) {
     importExpenseAccounts,
     seedDefaultAccounts
   } = usePOs();
-  const { usersList, updateUserAllowedAccounts } = useAuth();
+  const { currentUser, usersList, updateUserAllowedAccounts } = useAuth();
+  const isStaffReadOnly = readOnly || (currentUser?.role !== 'admin' && currentUser?.role !== 'accountant');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusMessage, setStatusMessage] = useState(null);
@@ -316,7 +318,9 @@ export default function AccountCodesModal({ isOpen, onClose }) {
     }
   };
 
-  const filteredAccounts = expenseAccounts
+  const baseAccounts = isStaffReadOnly ? (userExpenseAccounts || []) : expenseAccounts;
+
+  const filteredAccounts = baseAccounts
     .filter((acct) => {
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase();
@@ -343,7 +347,7 @@ export default function AccountCodesModal({ isOpen, onClose }) {
           <div>
             <div className="flex items-center gap-2 flex-wrap mb-1">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#ce1226]/30 text-[#ffde6a] border border-[#ce1226]/60">
-                General Ledger & User Account Access
+                {isStaffReadOnly ? 'Faculty & Staff Account Balances' : 'General Ledger & User Account Access'}
               </span>
               {fiscalYearInfo && (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-emerald-400/20 text-emerald-300 border border-emerald-400/30">
@@ -352,10 +356,14 @@ export default function AccountCodesModal({ isOpen, onClose }) {
               )}
             </div>
             <h2 className="text-lg font-bold tracking-tight">
-              Manage WCA Expense Account Codes ({expenseAccounts.length})
+              {isStaffReadOnly
+                ? `My Assigned Expense Account Codes (${baseAccounts.length})`
+                : `Manage WCA Expense Account Codes (${expenseAccounts.length})`}
             </h2>
             <p className="text-xs text-zinc-300">
-              Add, edit, delete, or import GL account codes, track June 1 fiscal year budgets, and assign staff access.
+              {isStaffReadOnly
+                ? 'View your assigned department account numbers, annual fiscal year budgets, YTD spending (since June 1), and remaining available funds.'
+                : 'Add, edit, delete, or import GL account codes, track June 1 fiscal year budgets, and assign staff access.'}
             </p>
           </div>
           <button
@@ -375,47 +383,53 @@ export default function AccountCodesModal({ isOpen, onClose }) {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by account # (e.g. 566), name, department, or staff email..."
+              placeholder={
+                isStaffReadOnly
+                  ? 'Search your assigned accounts by # (e.g. 566), name, or department...'
+                  : 'Search by account # (e.g. 566), name, department, or staff email...'
+              }
               className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-[#0C2340]"
             />
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv"
-              onChange={handleImportCSVFile}
-              className="hidden"
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-semibold text-xs transition shadow-sm"
-            >
-              <Upload className="w-3.5 h-3.5 text-blue-600" />
-              <span>Import CSV</span>
-            </button>
+          {!isStaffReadOnly && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                onChange={handleImportCSVFile}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-semibold text-xs transition shadow-sm"
+              >
+                <Upload className="w-3.5 h-3.5 text-blue-600" />
+                <span>Import CSV</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={handleExportAccountsCSV}
-              title="Download CSV of current GL accounts (also serves as your CSV import template)"
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-semibold text-xs transition shadow-sm"
-            >
-              <Download className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Export / CSV Template</span>
-            </button>
+              <button
+                type="button"
+                onClick={handleExportAccountsCSV}
+                title="Download CSV of current GL accounts (also serves as your CSV import template)"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-semibold text-xs transition shadow-sm"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Export / CSV Template</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={openAddForm}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-sm transition"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add Account Code</span>
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={openAddForm}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-sm transition"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Account Code</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Status / Error Alerts */}
@@ -655,15 +669,21 @@ export default function AccountCodesModal({ isOpen, onClose }) {
                   <th className="py-3 px-4 text-right">FY Budget</th>
                   <th className="py-3 px-4 text-right">YTD Spent (Since Jun 1)</th>
                   <th className="py-3 px-4">Available ($ & %)</th>
-                  <th className="py-3 px-4">Assigned Staff</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+                  {!isStaffReadOnly && (
+                    <>
+                      <th className="py-3 px-4">Assigned Staff</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
                 {filteredAccounts.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-slate-400">
-                      No expense accounts match your search.
+                    <td colSpan={isStaffReadOnly ? 5 : 7} className="py-8 text-center text-slate-400">
+                      {isStaffReadOnly && baseAccounts.length === 0
+                        ? 'No expense accounts are currently assigned to your profile. Please contact the Business Office if you need account access.'
+                        : 'No expense accounts match your search.'}
                     </td>
                   </tr>
                 ) : (
@@ -754,63 +774,67 @@ export default function AccountCodesModal({ isOpen, onClose }) {
                             </span>
                           )}
                         </td>
-                        <td className="py-3 px-4">
-                          {assignedEmails.length === 0 ? (
-                            <span className="text-[11px] text-slate-400 italic">
-                              Admins & Business Office Only (Click Edit to assign staff)
-                            </span>
-                          ) : (
-                            <div className="flex items-center gap-1 flex-wrap">
-                              {assignedEmails.map((em) => (
-                                <span
-                                  key={em}
-                                  className="px-2 py-0.5 rounded-full text-[11px] font-mono bg-blue-50 text-blue-800 border border-blue-200"
-                                >
-                                  {em}
+                        {!isStaffReadOnly && (
+                          <>
+                            <td className="py-3 px-4">
+                              {assignedEmails.length === 0 ? (
+                                <span className="text-[11px] text-slate-400 italic">
+                                  Admins & Business Office Only (Click Edit to assign staff)
                                 </span>
-                              ))}
-                            </div>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          {confirmDeleteId === acct.id ? (
-                            <div className="inline-flex items-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => handleDelete(acct)}
-                                className="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-700 text-white font-semibold text-[11px]"
-                              >
-                                Remove
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setConfirmDeleteId(null)}
-                                className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px]"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="inline-flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => openEditForm(acct)}
-                                title="Edit account code or assign staff"
-                                className="p-1.5 rounded-lg text-slate-500 hover:text-[#0C2340] hover:bg-slate-100 transition"
-                              >
-                                <Edit3 className="w-4 h-4" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setConfirmDeleteId(acct.id)}
-                                title="Delete account code"
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          )}
-                        </td>
+                              ) : (
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  {assignedEmails.map((em) => (
+                                    <span
+                                      key={em}
+                                      className="px-2 py-0.5 rounded-full text-[11px] font-mono bg-blue-50 text-blue-800 border border-blue-200"
+                                    >
+                                      {em}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              {confirmDeleteId === acct.id ? (
+                                <div className="inline-flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDelete(acct)}
+                                    className="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-700 text-white font-semibold text-[11px]"
+                                  >
+                                    Remove
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmDeleteId(null)}
+                                    className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px]"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="inline-flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditForm(acct)}
+                                    title="Edit account code or assign staff"
+                                    className="p-1.5 rounded-lg text-slate-500 hover:text-[#0C2340] hover:bg-slate-100 transition"
+                                  >
+                                    <Edit3 className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmDeleteId(acct.id)}
+                                    title="Delete account code"
+                                    className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          </>
+                        )}
                       </tr>
                     );
                   })
@@ -822,14 +846,20 @@ export default function AccountCodesModal({ isOpen, onClose }) {
 
         {/* Footer */}
         <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
-          <button
-            type="button"
-            onClick={handleRestoreDefaults}
-            className="inline-flex items-center gap-1.5 text-slate-500 hover:text-slate-800 font-medium transition"
-          >
-            <Database className="w-3.5 h-3.5 text-amber-600" />
-            <span>Restore Starter Account Codes</span>
-          </button>
+          {!isStaffReadOnly ? (
+            <button
+              type="button"
+              onClick={handleRestoreDefaults}
+              className="inline-flex items-center gap-1.5 text-slate-500 hover:text-slate-800 font-medium transition"
+            >
+              <Database className="w-3.5 h-3.5 text-amber-600" />
+              <span>Restore Starter Account Codes</span>
+            </button>
+          ) : (
+            <span className="text-slate-500">
+              Showing {filteredAccounts.length} assigned account{filteredAccounts.length === 1 ? '' : 's'} for {currentUser?.email || 'your account'}.
+            </span>
+          )}
 
           <button
             type="button"

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { usePOs } from '../../context/POContext';
 import StatusBadge from '../StatusBadge';
+import AccountCodesModal from '../AccountantView/AccountCodesModal';
 import { printPurchaseOrder } from '../../services/exportService';
 import {
   Plus,
@@ -16,17 +17,33 @@ import {
   FileText,
   DollarSign,
   PackageCheck,
-  Printer
+  Printer,
+  Database,
+  Building2,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 
 export default function EmployeeDashboard({ onOpenNewPO, onSelectPO, onEditPO }) {
   const { currentUser } = useAuth();
-  const { purchaseOrders, expenseAccountsMap, deletePurchaseOrder } = usePOs();
+  const {
+    purchaseOrders,
+    userExpenseAccounts,
+    expenseAccountsMap,
+    fiscalYearInfo,
+    getAccountBudgetStats,
+    deletePurchaseOrder
+  } = usePOs();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [confirmDeletePOId, setConfirmDeletePOId] = useState(null);
+  const [isAccountCodesModalOpen, setIsAccountCodesModalOpen] = useState(false);
+  const [showAccountsTable, setShowAccountsTable] = useState(true);
   const isAccountantOrAdmin = currentUser?.role === 'admin' || currentUser?.role === 'accountant';
+  const assignedAccounts = [...(userExpenseAccounts || [])].sort((a, b) =>
+    (a.id || '').replace(/^ACCT-/i, '').localeCompare((b.id || '').replace(/^ACCT-/i, ''))
+  );
 
   // Filter to show user's purchase orders (or all if demo testing)
   const myPOs = purchaseOrders.filter(po => {
@@ -89,13 +106,25 @@ export default function EmployeeDashboard({ onOpenNewPO, onSelectPO, onEditPO })
           </p>
         </div>
 
-        <button
-          onClick={onOpenNewPO}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#ce1226] hover:bg-[#a50e1e] text-white font-bold text-sm shadow-md transition-all hover:scale-[1.02] active:scale-[0.98]"
-        >
-          <Plus className="w-5 h-5 text-[#ffde6a] stroke-[2.5]" />
-          <span>New Purchase Order</span>
-        </button>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setIsAccountCodesModalOpen(true)}
+            title="View your assigned GL expense account codes, annual budgets, YTD spending, and remaining available funds"
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-zinc-800/90 hover:bg-zinc-700 text-zinc-100 hover:text-white font-semibold text-xs transition border border-zinc-600 shadow-sm"
+          >
+            <Database className="w-4 h-4 text-[#ffde6a]" />
+            <span>My Account Codes ({assignedAccounts.length})</span>
+          </button>
+
+          <button
+            onClick={onOpenNewPO}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#ce1226] hover:bg-[#a50e1e] text-white font-bold text-sm shadow-md transition-all hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <Plus className="w-5 h-5 text-[#ffde6a] stroke-[2.5]" />
+            <span>New Purchase Order</span>
+          </button>
+        </div>
       </div>
 
       {/* Metric Cards */}
@@ -137,6 +166,181 @@ export default function EmployeeDashboard({ onOpenNewPO, onSelectPO, onEditPO })
           <div className="text-[11px] text-rose-600 mt-0.5">Requires receipt or edit</div>
         </div>
 
+      </div>
+
+      {/* Assigned Expense Account Codes & Live Budget Card */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div
+          onClick={() => setShowAccountsTable((prev) => !prev)}
+          className="px-5 py-3.5 bg-slate-50/90 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 cursor-pointer select-none hover:bg-slate-100/70 transition"
+        >
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="w-7 h-7 rounded-lg bg-[#0C2340] text-[#ffde6a] flex items-center justify-center shrink-0">
+              <Database className="w-3.5 h-3.5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-[#0C2340]">
+                  My Assigned Expense Account Codes ({assignedAccounts.length})
+                </h2>
+                {fiscalYearInfo && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    {fiscalYearInfo.label}: {fiscalYearInfo.periodLabel} (Resets Jun 1)
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Real-time fiscal year budget, year-to-date spending since June 1, and remaining available balance for your assigned accounts.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-center" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setIsAccountCodesModalOpen(true)}
+              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 transition shadow-sm"
+            >
+              Open Full View
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowAccountsTable((prev) => !prev)}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 transition"
+              title={showAccountsTable ? 'Collapse Account Codes' : 'Expand Account Codes'}
+            >
+              {showAccountsTable ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          </div>
+        </div>
+
+        {showAccountsTable && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50/50 text-[11px] font-semibold uppercase tracking-wider text-slate-500 border-b border-slate-200">
+                  <th className="py-2.5 px-4">Account #</th>
+                  <th className="py-2.5 px-4">Description / Dept</th>
+                  <th className="py-2.5 px-4 text-right">FY Budget</th>
+                  <th className="py-2.5 px-4 text-right">YTD Spent (Since Jun 1)</th>
+                  <th className="py-2.5 px-4">Available ($ & %)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs">
+                {assignedAccounts.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-6 px-4 text-center text-slate-400">
+                      No expense accounts are currently assigned to your profile. Please contact the Business Office to have your GL account code(s) assigned.
+                    </td>
+                  </tr>
+                ) : (
+                  assignedAccounts.map((acct) => {
+                    const shortCode = (acct.id || '').replace(/^ACCT-/i, '');
+                    const bStats = getAccountBudgetStats ? getAccountBudgetStats(acct.id) : null;
+                    const budget = bStats ? bStats.budget : Number(acct.budget) || 0;
+                    const ytdSpent = bStats ? bStats.ytdSpent : 0;
+                    const pendingAmt = bStats ? bStats.pendingAmount : 0;
+                    const available = budget - ytdSpent;
+                    const pctAvail = budget > 0 ? ((budget - ytdSpent) / budget) * 100 : null;
+
+                    const barColor =
+                      pctAvail === null
+                        ? 'bg-slate-300'
+                        : pctAvail <= 10
+                        ? 'bg-rose-500'
+                        : pctAvail <= 25
+                        ? 'bg-amber-500'
+                        : 'bg-emerald-500';
+
+                    const badgeColor =
+                      pctAvail === null
+                        ? 'bg-slate-100 text-slate-600 border-slate-200'
+                        : pctAvail < 0
+                        ? 'bg-rose-100 text-rose-800 border-rose-300'
+                        : pctAvail <= 20
+                        ? 'bg-amber-100 text-amber-900 border-amber-300'
+                        : 'bg-emerald-50 text-emerald-800 border-emerald-200';
+
+                    return (
+                      <tr key={acct.id} className="hover:bg-slate-50/80 transition">
+                        <td className="py-2.5 px-4 font-mono font-bold text-[#0C2340] whitespace-nowrap">
+                          <span className="px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200">
+                            {shortCode}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-4">
+                          <div className="font-semibold text-slate-900">{acct.name}</div>
+                          <div className="text-[11px] text-slate-500 inline-flex items-center gap-1 mt-0.5">
+                            <Building2 className="w-3 h-3 text-slate-400" />
+                            <span>{acct.dept || 'General'}</span>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-4 text-right font-mono font-semibold text-slate-800 whitespace-nowrap">
+                          {budget > 0
+                            ? `$${budget.toLocaleString('en-US', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                              })}`
+                            : '—'}
+                        </td>
+                        <td className="py-2.5 px-4 text-right font-mono whitespace-nowrap">
+                          <div className="font-semibold text-slate-800">
+                            ${ytdSpent.toLocaleString('en-US', {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2
+                            })}
+                          </div>
+                          {pendingAmt > 0 && (
+                            <div className="text-[10px] text-amber-700 font-medium">
+                              +${pendingAmt.toLocaleString('en-US', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                              })}{' '}
+                              Pending
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-4 min-w-[200px]">
+                          {budget > 0 ? (
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <span
+                                  className={`font-mono font-bold ${
+                                    available < 0 ? 'text-rose-600' : 'text-slate-900'
+                                  }`}
+                                >
+                                  ${available.toLocaleString('en-US', {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2
+                                  })}
+                                </span>
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${badgeColor}`}
+                                >
+                                  {pctAvail.toFixed(1)}% Avail
+                                </span>
+                              </div>
+                              <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full ${barColor} transition-all`}
+                                  style={{
+                                    width: `${Math.max(0, Math.min(100, pctAvail))}%`
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-slate-400 italic">No budget set</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Controls & Filters Bar */}
@@ -316,6 +520,11 @@ export default function EmployeeDashboard({ onOpenNewPO, onSelectPO, onEditPO })
         )}
       </div>
 
+      <AccountCodesModal
+        isOpen={isAccountCodesModalOpen}
+        onClose={() => setIsAccountCodesModalOpen(false)}
+        readOnly={true}
+      />
     </div>
   );
 }

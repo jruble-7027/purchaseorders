@@ -1,12 +1,12 @@
 export const DEFAULT_EXPENSE_ACCOUNTS = [
-  { id: 'ACCT-566400', name: 'IT Supplies', budget: 15000, dept: 'IT Technology' },
-  { id: 'ACCT-566425', name: 'Software Maintenance', budget: 120000, dept: 'IT Technology' },
-  { id: 'ACCT-4003', name: 'Fine Arts & Music Department', budget: 18000, dept: 'IT Technology' },
+  { id: 'ACCT-566400', name: 'IT Supplies', budget: 15000, dept: 'IT Technology', allowed_emails: ['faculty@wcatrojans.org'] },
+  { id: 'ACCT-566425', name: 'Software Maintenance', budget: 120000, dept: 'IT Technology', allowed_emails: ['faculty@wcatrojans.org'] },
+  { id: 'ACCT-4003', name: 'Fine Arts & Music Department', budget: 18000, dept: 'Fine Arts & Music Department', allowed_emails: ['jscott@wcatrojans.org'] },
   { id: 'ACCT-4004', name: 'Information Technology & Software', budget: 45000, dept: 'IT Technology' },
-  { id: 'ACCT-4005', name: 'Facilities & Campus Maintenance', budget: 60000, dept: 'IT Technology' },
-  { id: 'ACCT-4006', name: 'Middle School Humanities & Library', budget: 12000, dept: 'IT Technology' },
-  { id: 'ACCT-4007', name: 'Elementary Academic Supplies', budget: 20000, dept: 'IT Technology' },
-  { id: 'ACCT-4008', name: 'Administrative & General Operations', budget: 25000, dept: 'IT Technology' },
+  { id: 'ACCT-4005', name: 'Facilities & Campus Maintenance', budget: 60000, dept: 'Facilities & Campus Maintenance' },
+  { id: 'ACCT-4006', name: 'Middle School Humanities & Library', budget: 12000, dept: 'Middle School Humanities & Library' },
+  { id: 'ACCT-4007', name: 'Elementary Academic Supplies', budget: 20000, dept: 'Elementary Academic' },
+  { id: 'ACCT-4008', name: 'Administrative & General Operations', budget: 25000, dept: 'Administrative & General Operations' },
 ];
 
 export const INITIAL_PURCHASE_ORDERS = [
@@ -225,6 +225,7 @@ export const DEMO_USERS = {
     email: 'faculty@wcatrojans.org',
     role: 'employee',
     department: 'High School Science',
+    allowed_accounts: ['ACCT-566400', 'ACCT-566425'],
     photoURL: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150'
   }
 };
@@ -257,6 +258,7 @@ export const INITIAL_DIRECTORY_USERS = [
     email: 'mdavis@wcatrojans.org',
     role: 'employee',
     department: 'Athletics Department',
+    allowed_accounts: [],
     photoURL: '',
     last_login: '2026-10-18T10:15:00Z'
   },
@@ -267,6 +269,7 @@ export const INITIAL_DIRECTORY_USERS = [
     email: 'jscott@wcatrojans.org',
     role: 'employee',
     department: 'Fine Arts & Music Department',
+    allowed_accounts: ['ACCT-4003'],
     photoURL: '',
     last_login: '2026-10-12T16:00:00Z'
   },
@@ -277,6 +280,7 @@ export const INITIAL_DIRECTORY_USERS = [
     email: 'faculty@wcatrojans.org',
     role: 'employee',
     department: 'High School Science',
+    allowed_accounts: ['ACCT-566400', 'ACCT-566425'],
     photoURL: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150',
     last_login: '2026-10-20T14:32:00Z'
   }

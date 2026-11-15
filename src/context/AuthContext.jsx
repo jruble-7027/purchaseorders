@@ -242,7 +242,7 @@ export function AuthProvider({ children }) {
 
   // Keep currentUser's role, department & assigned accounts live-synced if an Admin/Approver updates them in Firestore
   useEffect(() => {
-    if (!currentUser || isDemoMode || !usersList.length) return;
+    if (!currentUser || !usersList.length) return;
     const match = usersList.find(
       (u) =>
         u.id === currentUser.uid ||
