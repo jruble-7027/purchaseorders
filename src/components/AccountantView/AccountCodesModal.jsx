@@ -2,6 +2,10 @@ import React, { useState, useRef } from 'react';
 import { usePOs } from '../../context/POContext';
 import { useAuth } from '../../context/AuthContext';
 import {
+  exportAccountBalancesToCSV,
+  printAccountBalancesReport
+} from '../../services/exportService';
+import {
   X,
   Plus,
   Search,
@@ -13,7 +17,9 @@ import {
   Database,
   Users,
   Building2,
-  Hash
+  Hash,
+  Printer,
+  Filter
 } from 'lucide-react';
 
 export default function AccountCodesModal({ isOpen, onClose, readOnly = false }) {
@@ -31,6 +37,8 @@ export default function AccountCodesModal({ isOpen, onClose, readOnly = false })
   const isStaffReadOnly = readOnly || (currentUser?.role !== 'admin' && currentUser?.role !== 'accountant');
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [deptFilter, setDeptFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('ALL');
   const [statusMessage, setStatusMessage] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -320,24 +328,81 @@ export default function AccountCodesModal({ isOpen, onClose, readOnly = false })
 
   const baseAccounts = isStaffReadOnly ? (userExpenseAccounts || []) : expenseAccounts;
 
+  const uniqueDepartments = Array.from(
+    new Set(baseAccounts.map((a) => (a.dept || 'General').trim()).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b));
+
   const filteredAccounts = baseAccounts
     .filter((acct) => {
+      const dept = acct.dept || 'General';
+      if (deptFilter !== 'ALL' && dept !== deptFilter) return false;
+
+      if (statusFilter !== 'ALL') {
+        const bStats = getAccountBudgetStats ? getAccountBudgetStats(acct.id) : null;
+        const budget = bStats ? bStats.budget : Number(acct.budget) || 0;
+        const ytdSpent = bStats ? bStats.ytdSpent : 0;
+        const pctAvail = budget > 0 ? ((budget - ytdSpent) / budget) * 100 : null;
+
+        if (statusFilter === 'HEALTHY' && (pctAvail === null || pctAvail <= 20)) return false;
+        if (statusFilter === 'LOW' && (pctAvail === null || pctAvail < 0 || pctAvail > 20)) return false;
+        if (statusFilter === 'OVER' && (pctAvail === null || pctAvail >= 0)) return false;
+        if (statusFilter === 'NO_BUDGET' && budget > 0) return false;
+      }
+
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase();
       const shortCode = formatShortCode(acct.id).toLowerCase();
       const fullId = (acct.id || '').toLowerCase();
       const name = (acct.name || '').toLowerCase();
-      const dept = (acct.dept || '').toLowerCase();
+      const deptLower = dept.toLowerCase();
       const emails = getAssignedUsersForAccount(acct).join(' ');
       return (
         shortCode.includes(q) ||
         fullId.includes(q) ||
         name.includes(q) ||
-        dept.includes(q) ||
+        deptLower.includes(q) ||
         emails.includes(q)
       );
     })
     .sort((a, b) => formatShortCode(a.id).localeCompare(formatShortCode(b.id)));
+
+  const buildFilterSummaryLabel = () => {
+    const parts = [];
+    if (deptFilter !== 'ALL') parts.push(`Dept: ${deptFilter}`);
+    if (statusFilter !== 'ALL') {
+      const statusMap = {
+        HEALTHY: 'Healthy (>20% Avail)',
+        LOW: 'Low Balance (<=20% Avail)',
+        OVER: 'Over Budget (<0%)',
+        NO_BUDGET: 'No Budget Set'
+      };
+      parts.push(statusMap[statusFilter] || statusFilter);
+    }
+    if (searchQuery.trim()) parts.push(`Search: "${searchQuery.trim()}"`);
+    return parts.join(' • ');
+  };
+
+  const handleExportFilteredBalancesCSV = () => {
+    exportAccountBalancesToCSV(
+      filteredAccounts,
+      getAccountBudgetStats,
+      fiscalYearInfo,
+      currentUser,
+      buildFilterSummaryLabel()
+    );
+  };
+
+  const handlePrintFilteredBalancesPDF = () => {
+    printAccountBalancesReport(
+      filteredAccounts,
+      getAccountBudgetStats,
+      fiscalYearInfo,
+      currentUser,
+      buildFilterSummaryLabel()
+    );
+  };
+
+  const hasActiveFilters = Boolean(searchQuery.trim() || deptFilter !== 'ALL' || statusFilter !== 'ALL');
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
@@ -362,7 +427,7 @@ export default function AccountCodesModal({ isOpen, onClose, readOnly = false })
             </h2>
             <p className="text-xs text-zinc-300">
               {isStaffReadOnly
-                ? 'View your assigned department account numbers, annual fiscal year budgets, YTD spending (since June 1), and remaining available funds.'
+                ? 'Filter your assigned department account numbers, track annual fiscal year budgets, and export or print a PDF balance report.'
                 : 'Add, edit, delete, or import GL account codes, track June 1 fiscal year budgets, and assign staff access.'}
             </p>
           </div>
@@ -375,61 +440,130 @@ export default function AccountCodesModal({ isOpen, onClose, readOnly = false })
           </button>
         </div>
 
-        {/* Action Toolbar */}
-        <div className="px-6 py-3.5 bg-slate-50 border-b border-slate-200 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={
-                isStaffReadOnly
-                  ? 'Search your assigned accounts by # (e.g. 566), name, or department...'
-                  : 'Search by account # (e.g. 566), name, department, or staff email...'
-              }
-              className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-[#0C2340]"
-            />
-          </div>
+        {/* Filter & Export Action Toolbar */}
+        <div className="px-6 py-3.5 bg-slate-50 border-b border-slate-200 flex flex-col gap-3">
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-2.5">
+            {/* Search & Filters */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1">
+              <div className="relative flex-1 min-w-[210px]">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={
+                    isStaffReadOnly
+                      ? 'Search by account # (e.g. 566), description, or dept...'
+                      : 'Search by account # (e.g. 566), name, dept, or staff email...'
+                  }
+                  className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-[#0C2340]"
+                />
+              </div>
 
-          {!isStaffReadOnly && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv"
-                onChange={handleImportCSVFile}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-semibold text-xs transition shadow-sm"
+              <select
+                value={deptFilter}
+                onChange={(e) => setDeptFilter(e.target.value)}
+                aria-label="Filter by Department"
+                className="px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0C2340]"
               >
-                <Upload className="w-3.5 h-3.5 text-blue-600" />
-                <span>Import CSV</span>
-              </button>
+                <option value="ALL">All Departments ({uniqueDepartments.length})</option>
+                {uniqueDepartments.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
 
-              <button
-                type="button"
-                onClick={handleExportAccountsCSV}
-                title="Download CSV of current GL accounts (also serves as your CSV import template)"
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-semibold text-xs transition shadow-sm"
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                aria-label="Filter by Budget Status"
+                className="px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0C2340]"
               >
-                <Download className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Export / CSV Template</span>
-              </button>
+                <option value="ALL">All Budget Statuses</option>
+                <option value="HEALTHY">Healthy (&gt; 20% Avail)</option>
+                <option value="LOW">Low Balance (≤ 20% Avail)</option>
+                <option value="OVER">Over Budget (&lt; 0%)</option>
+                <option value="NO_BUDGET">No Budget Set</option>
+              </select>
 
-              <button
-                type="button"
-                onClick={openAddForm}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-sm transition"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add Account Code</span>
-              </button>
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setDeptFilter('ALL');
+                    setStatusFilter('ALL');
+                  }}
+                  className="px-2.5 py-2 text-xs font-semibold text-amber-700 hover:text-amber-900 underline whitespace-nowrap"
+                >
+                  Reset
+                </button>
+              )}
             </div>
-          )}
+
+            {/* Export & Admin Actions */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={handleExportFilteredBalancesCSV}
+                title="Download CSV of the currently filtered account balances (includes FY Budget, YTD Spent, and Available $ & %)"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition shadow-sm"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Export CSV</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePrintFilteredBalancesPDF}
+                title="Print or Save as PDF the currently filtered account balances report"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#0C2340] hover:bg-slate-800 text-white font-semibold text-xs transition shadow-sm"
+              >
+                <Printer className="w-3.5 h-3.5 text-[#ffde6a]" />
+                <span>Print / PDF</span>
+              </button>
+
+              {!isStaffReadOnly && (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv"
+                    onChange={handleImportCSVFile}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-semibold text-xs transition shadow-sm"
+                  >
+                    <Upload className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Import CSV</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleExportAccountsCSV}
+                    title="Download CSV template with assigned staff emails for bulk import"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-semibold text-xs transition shadow-sm"
+                  >
+                    <Download className="w-3.5 h-3.5 text-slate-600" />
+                    <span>CSV Template</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={openAddForm}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-sm transition"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add Code</span>
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Status / Error Alerts */}

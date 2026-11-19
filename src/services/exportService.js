@@ -602,3 +602,431 @@ export function printPurchaseOrder(po, expenseAccountsMap = {}) {
     setTimeout(cleanup, 2000);
   }, 100);
 }
+
+/**
+ * Exports a filtered list of GL Expense Accounts with live Fiscal Year budget,
+ * YTD spent (since June 1), Pending, and Available ($ & %) to CSV, including a Totals row.
+ */
+export function exportAccountBalancesToCSV(
+  accounts = [],
+  getAccountBudgetStats,
+  fiscalYearInfo,
+  currentUser = null,
+  filterSummary = ''
+) {
+  if (!accounts || accounts.length === 0) {
+    alert('No expense accounts match the current filter to export.');
+    return;
+  }
+
+  const fyLabel = fiscalYearInfo?.label || 'Current FY';
+  const headers = [
+    'Account #',
+    'Description / Account Name',
+    'Department',
+    'Fiscal Year',
+    'FY Budget ($)',
+    'YTD Spent Since Jun 1 ($)',
+    'Pending Approval ($)',
+    'Available Balance ($)',
+    'Available (%)'
+  ];
+
+  const escapeCSV = (value) => {
+    if (value === null || value === undefined) return '""';
+    const stringVal = String(value).replace(/"/g, '""');
+    return `"${stringVal}"`;
+  };
+
+  let totalBudget = 0;
+  let totalSpent = 0;
+  let totalPending = 0;
+  let totalAvailable = 0;
+
+  const rows = accounts.map((acct) => {
+    const shortCode = (acct.id || '').replace(/^ACCT-/i, '');
+    const bStats = getAccountBudgetStats ? getAccountBudgetStats(acct.id) : null;
+    const budget = bStats ? bStats.budget : Number(acct.budget) || 0;
+    const ytdSpent = bStats ? bStats.ytdSpent : 0;
+    const pendingAmt = bStats ? bStats.pendingAmount : 0;
+    const available = budget - ytdSpent;
+    const pctAvail = budget > 0 ? ((budget - ytdSpent) / budget) * 100 : null;
+
+    totalBudget += budget;
+    totalSpent += ytdSpent;
+    totalPending += pendingAmt;
+    totalAvailable += available;
+
+    return [
+      escapeCSV(shortCode),
+      escapeCSV(acct.name || ''),
+      escapeCSV(acct.dept || 'General'),
+      escapeCSV(fyLabel),
+      escapeCSV(budget.toFixed(2)),
+      escapeCSV(ytdSpent.toFixed(2)),
+      escapeCSV(pendingAmt.toFixed(2)),
+      escapeCSV(available.toFixed(2)),
+      escapeCSV(pctAvail !== null ? `${pctAvail.toFixed(1)}%` : 'N/A')
+    ].join(',');
+  });
+
+  const totalPctAvail =
+    totalBudget > 0 ? `${(((totalBudget - totalSpent) / totalBudget) * 100).toFixed(1)}%` : 'N/A';
+
+  const totalsRow = [
+    escapeCSV('TOTALS'),
+    escapeCSV(
+      `${accounts.length} Account(s)${filterSummary ? ` (${filterSummary})` : ''}`
+    ),
+    escapeCSV(currentUser?.email || ''),
+    escapeCSV(fyLabel),
+    escapeCSV(totalBudget.toFixed(2)),
+    escapeCSV(totalSpent.toFixed(2)),
+    escapeCSV(totalPending.toFixed(2)),
+    escapeCSV(totalAvailable.toFixed(2)),
+    escapeCSV(totalPctAvail)
+  ].join(',');
+
+  const csvContent = [headers.join(','), ...rows, totalsRow].join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  const timestamp = new Date().toISOString().slice(0, 10);
+  link.setAttribute('href', url);
+  link.setAttribute('download', `WCA_Account_Balances_${timestamp}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Generates an official, print-ready / Save-as-PDF Wesleyan Christian Academy
+ * Expense Account Budget & Balance Report for the currently filtered account list.
+ */
+export function printAccountBalancesReport(
+  accounts = [],
+  getAccountBudgetStats,
+  fiscalYearInfo,
+  currentUser = null,
+  filterSummary = ''
+) {
+  if (!accounts || accounts.length === 0) {
+    alert('No expense accounts match the current filter to print.');
+    return;
+  }
+
+  const fyLabel = fiscalYearInfo?.label || 'Current Fiscal Year';
+  const fyPeriod = fiscalYearInfo?.periodLabel || 'June 1 – May 31';
+
+  let totalBudget = 0;
+  let totalSpent = 0;
+  let totalPending = 0;
+  let totalAvailable = 0;
+
+  const rowsHtml = accounts
+    .map((acct, idx) => {
+      const shortCode = (acct.id || '').replace(/^ACCT-/i, '');
+      const bStats = getAccountBudgetStats ? getAccountBudgetStats(acct.id) : null;
+      const budget = bStats ? bStats.budget : Number(acct.budget) || 0;
+      const ytdSpent = bStats ? bStats.ytdSpent : 0;
+      const pendingAmt = bStats ? bStats.pendingAmount : 0;
+      const available = budget - ytdSpent;
+      const pctAvail = budget > 0 ? ((budget - ytdSpent) / budget) * 100 : null;
+
+      totalBudget += budget;
+      totalSpent += ytdSpent;
+      totalPending += pendingAmt;
+      totalAvailable += available;
+
+      const statusColor =
+        pctAvail === null
+          ? '#64748b'
+          : pctAvail < 0
+          ? '#dc2626'
+          : pctAvail <= 20
+          ? '#d97706'
+          : '#059669';
+
+      const statusBg =
+        pctAvail === null
+          ? '#f1f5f9'
+          : pctAvail < 0
+          ? '#fef2f2'
+          : pctAvail <= 20
+          ? '#fffbeb'
+          : '#ecfdf5';
+
+      return `
+        <tr style="background-color: ${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+          <td style="padding: 7px 8px; border: 1px solid #cbd5e1; font-family: monospace; font-weight: 800; color: #0C2340; font-size: 11px;">
+            ${shortCode}
+          </td>
+          <td style="padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 10.5px;">
+            <div style="font-weight: 700; color: #0f172a;">${acct.name || ''}</div>
+            <div style="font-size: 9.5px; color: #64748b;">${acct.dept || 'General'}</div>
+          </td>
+          <td style="padding: 7px 8px; border: 1px solid #cbd5e1; text-align: right; font-family: monospace; font-weight: 600; font-size: 10.5px;">
+            ${budget > 0 ? `$${budget.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+          </td>
+          <td style="padding: 7px 8px; border: 1px solid #cbd5e1; text-align: right; font-family: monospace; font-size: 10.5px;">
+            <div style="font-weight: 700; color: #0f172a;">
+              $${ytdSpent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            ${
+              pendingAmt > 0
+                ? `<div style="font-size: 9px; color: #b45309; font-weight: 600;">+$${pendingAmt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Pending</div>`
+                : ''
+            }
+          </td>
+          <td style="padding: 7px 8px; border: 1px solid #cbd5e1; text-align: right; font-family: monospace; font-size: 10.5px;">
+            ${
+              budget > 0
+                ? `<span style="font-weight: 800; color: ${available < 0 ? '#dc2626' : '#0f172a'};">
+                    $${available.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  <span style="display: inline-block; margin-left: 6px; padding: 2px 6px; border-radius: 9999px; font-size: 9px; font-weight: 800; color: ${statusColor}; background: ${statusBg}; border: 1px solid ${statusColor}40;">
+                    ${pctAvail.toFixed(1)}% Avail
+                  </span>`
+                : `<span style="color: #94a3b8; font-style: italic; font-size: 9.5px;">No budget set</span>`
+            }
+          </td>
+        </tr>
+      `;
+    })
+    .join('');
+
+  const totalPctAvail =
+    totalBudget > 0 ? (((totalBudget - totalSpent) / totalBudget) * 100).toFixed(1) : null;
+
+  // Clean up any previously injected print containers
+  const existingArea = document.getElementById('wca-po-print-area');
+  if (existingArea) existingArea.remove();
+  const existingStyles = document.getElementById('wca-po-print-styles');
+  if (existingStyles) existingStyles.remove();
+
+  const styleEl = document.createElement('style');
+  styleEl.id = 'wca-po-print-styles';
+  styleEl.innerHTML = `
+    @media screen {
+      #wca-po-print-area {
+        display: none !important;
+      }
+    }
+    @media print {
+      @page {
+        size: letter portrait;
+        margin: 0mm !important;
+      }
+      html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        color: #0f172a !important;
+        width: 100% !important;
+        height: auto !important;
+      }
+      #root {
+        display: none !important;
+      }
+      #wca-po-print-area {
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: space-between !important;
+        min-height: 100vh !important;
+        box-sizing: border-box !important;
+        padding: 12mm 14mm 12mm 14mm !important;
+        font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif !important;
+        font-size: 11px !important;
+        line-height: 1.35 !important;
+        background: #ffffff !important;
+        color: #0f172a !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      #wca-po-print-area * {
+        box-sizing: border-box !important;
+      }
+      .acct-print-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        border-bottom: 3px solid #ce1226;
+        padding-bottom: 10px;
+        margin-bottom: 12px;
+      }
+      .acct-kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .acct-kpi-card {
+        background: #f8fafc;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        padding: 8px 10px;
+      }
+      .acct-kpi-label {
+        font-size: 8.5px;
+        text-transform: uppercase;
+        font-weight: 800;
+        color: #64748b;
+        letter-spacing: 0.04em;
+      }
+      .acct-kpi-val {
+        font-size: 14px;
+        font-weight: 800;
+        font-family: monospace;
+        color: #0f172a;
+        margin-top: 2px;
+      }
+      .acct-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 12px;
+      }
+      .acct-table th {
+        background: #0f172a !important;
+        color: #ffffff !important;
+        font-size: 9px;
+        text-transform: uppercase;
+        font-weight: 700;
+        padding: 6px 8px;
+        border: 1px solid #0f172a;
+        text-align: left;
+      }
+      .acct-bottom-footer {
+        margin-top: 14px;
+        padding-top: 8px;
+        border-top: 1.5px solid #0f172a;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 9.5px;
+        color: #475569;
+      }
+    }
+  `;
+  document.head.appendChild(styleEl);
+
+  const printContainer = document.createElement('div');
+  printContainer.id = 'wca-po-print-area';
+  printContainer.innerHTML = `
+    <div>
+      <div class="acct-print-header">
+        <div>
+          <div style="font-size: 18px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: -0.02em;">
+            Wesleyan Christian Academy
+          </div>
+          <div style="font-size: 10px; color: #475569; margin-top: 2px;">
+            1917 N. Centennial St. • High Point, NC 27262 • Business & Procurement Department
+          </div>
+          <div style="margin-top: 4px; font-size: 10.5px; font-weight: 700; color: #ce1226; text-transform: uppercase; letter-spacing: 0.04em;">
+            Department Expense Account Budget & Balance Report
+          </div>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-size: 13px; font-weight: 800; color: #0C2340; font-family: monospace;">
+            ${fyLabel}
+          </div>
+          <div style="font-size: 9.5px; color: #475569; margin-top: 1px;">
+            ${fyPeriod} (Resets June 1)
+          </div>
+          <div style="font-size: 9px; color: #64748b; margin-top: 3px;">
+            Generated: ${new Date().toLocaleString()}
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 7px 10px; margin-bottom: 10px; font-size: 10px;">
+        <div>
+          <strong>Prepared For:</strong> ${currentUser?.displayName || 'Faculty / Staff'} ${currentUser?.email ? `(${currentUser.email})` : ''}
+        </div>
+        <div>
+          <strong>Filter View:</strong> ${filterSummary || `All Assigned Accounts (${accounts.length})`}
+        </div>
+      </div>
+
+      <div class="acct-kpi-grid">
+        <div class="acct-kpi-card">
+          <div class="acct-kpi-label">Total FY Budget (${accounts.length} Accts)</div>
+          <div class="acct-kpi-val">$${totalBudget.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+        </div>
+        <div class="acct-kpi-card">
+          <div class="acct-kpi-label">YTD Spent (Since Jun 1)</div>
+          <div class="acct-kpi-val">$${totalSpent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+        </div>
+        <div class="acct-kpi-card">
+          <div class="acct-kpi-label">Pending Approval</div>
+          <div class="acct-kpi-val" style="color: #b45309;">$${totalPending.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+        </div>
+        <div class="acct-kpi-card" style="border-color: #ce1226;">
+          <div class="acct-kpi-label">Remaining Available</div>
+          <div class="acct-kpi-val" style="color: ${totalAvailable < 0 ? '#dc2626' : '#059669'};">
+            $${totalAvailable.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            ${totalPctAvail !== null ? `<span style="font-size: 10px;">(${totalPctAvail}%)</span>` : ''}
+          </div>
+        </div>
+      </div>
+
+      <table class="acct-table">
+        <thead>
+          <tr>
+            <th style="width: 90px;">Account #</th>
+            <th>Description / Department</th>
+            <th style="width: 115px; text-align: right;">FY Budget</th>
+            <th style="width: 135px; text-align: right;">YTD Spent (Since Jun 1)</th>
+            <th style="width: 165px; text-align: right;">Available ($ & %)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+          <tr style="background-color: #f1f5f9; font-weight: 800;">
+            <td style="padding: 8px; border: 1px solid #cbd5e1; font-family: monospace; color: #0C2340;">TOTALS</td>
+            <td style="padding: 8px; border: 1px solid #cbd5e1;">Combined Total (${accounts.length} Account${accounts.length === 1 ? '' : 's'})</td>
+            <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: right; font-family: monospace;">
+              $${totalBudget.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </td>
+            <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: right; font-family: monospace;">
+              $${totalSpent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </td>
+            <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: right; font-family: monospace; color: ${totalAvailable < 0 ? '#dc2626' : '#059669'};">
+              $${totalAvailable.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ${totalPctAvail !== null ? ` (${totalPctAvail}%)` : ''}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="acct-bottom-footer">
+      <div style="font-weight: 700; color: #ce1226;">
+        Wesleyan Christian Academy • Official General Ledger Account Balance Summary
+      </div>
+      <div style="font-family: monospace;">
+        ${fyLabel} • Printed ${new Date().toLocaleDateString()}
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(printContainer);
+
+  const cleanup = () => {
+    if (printContainer && printContainer.parentNode) {
+      printContainer.remove();
+    }
+    if (styleEl && styleEl.parentNode) {
+      styleEl.remove();
+    }
+    window.removeEventListener('afterprint', cleanup);
+  };
+
+  window.addEventListener('afterprint', cleanup);
+
+  setTimeout(() => {
+    window.print();
+    setTimeout(cleanup, 2000);
+  }, 100);
+}
